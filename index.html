@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HomeRun CS ticket tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#F9FAFB; --ink:#17202A; --muted:#5C6875; --faint:#8A95A1;
+  --line:#DDE1E6; --line-strong:#C6CCD3; --accent:#2346A0; --accent-soft:#E7ECF8; --accent-ink:#FFFFFF;
+  --ok:#1C7C4A; --ok-soft:#E3F3EA; --warn:#9A5B00; --warn-soft:#FBF0DC; --bad:#B3261E; --bad-soft:#FBE7E5;
+  --shadow:0 8px 28px rgba(23,32,42,.14);
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#12161B; --surface:#1A2027; --surface-2:#161B21; --ink:#E6EAEE; --muted:#A2ACB7; --faint:#77828E;
+    --line:#2C343D; --line-strong:#3A444F; --accent:#8FA8EE; --accent-soft:#232E4A; --accent-ink:#0E1420;
+    --ok:#6CCB97; --ok-soft:#173226; --warn:#E6B15C; --warn-soft:#3A2D16; --bad:#F08A80; --bad-soft:#3D1D1A;
+    --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12161B; --surface:#1A2027; --surface-2:#161B21; --ink:#E6EAEE; --muted:#A2ACB7; --faint:#77828E;
+  --line:#2C343D; --line-strong:#3A444F; --accent:#8FA8EE; --accent-soft:#232E4A; --accent-ink:#0E1420;
+  --ok:#6CCB97; --ok-soft:#173226; --warn:#E6B15C; --warn-soft:#3A2D16; --bad:#F08A80; --bad-soft:#3D1D1A;
+  --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none!important}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--accent)}
+.wrap{max-width:1600px;margin:0 auto;padding:20px clamp(12px,3vw,28px) 40px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:7px 12px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:4px 9px;font-size:12.5px;border-radius:6px}
+.btn.link{border:none;background:none;padding:2px 0;color:var(--accent);font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:14px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:none;background:none;padding:6px 12px;cursor:pointer;color:var(--muted);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.search{flex:1 1 220px;max-width:340px;border:1px solid var(--line-strong);border-radius:8px;padding:7px 11px;background:var(--surface)}
+.active-filters{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--ink);border-radius:999px;padding:3px 6px 3px 11px;font-size:12.5px}
+.fchip button{border:none;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 4px}
+
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.tally button{background:var(--surface);border:none;text-align:left;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.tally button:hover{background:var(--surface-2)}
+.tally button[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 0 -3px 0 var(--accent)}
+.tally .n{font-size:24px;font-weight:600;letter-spacing:-.02em}
+.tally .l{font-size:12.5px;color:var(--muted)}
+.tally .bad .n{color:var(--bad)} .tally .warn .n{color:var(--warn)} .tally .ok .n{color:var(--ok)}
+
+.banner{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:14px;color:var(--muted)}
+.banner.warn{border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}
+
+.tablebox{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:max(420px,calc(100dvh - 260px))}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1480px}
+thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);border-bottom:1px solid var(--line-strong);text-align:left;font-weight:600;font-size:12.5px;color:var(--muted);padding:0;white-space:nowrap}
+th .hd{display:flex;align-items:center;gap:4px;padding:9px 10px}
+th .fbtn{border:1px solid transparent;background:none;border-radius:5px;padding:1px 4px;cursor:pointer;color:var(--faint);display:inline-flex;align-items:center}
+th .fbtn:hover{border-color:var(--line-strong);color:var(--ink)}
+th .fbtn.on{background:var(--accent);color:var(--accent-ink)}
+td{border-bottom:1px solid var(--line);padding:9px 10px;vertical-align:top}
+tbody tr:hover td{background:var(--surface-2)}
+td.when{white-space:nowrap} td.when .d{font-weight:500} td.when .t{color:var(--muted);font-size:12.5px}
+.pill{display:inline-block;border-radius:5px;padding:1px 7px;font-size:12.5px;font-weight:500;white-space:nowrap}
+.pill.none{border:1px dashed var(--line-strong);color:var(--faint);font-weight:400}
+.pill.cat{background:var(--accent-soft)}
+.pill.yes{background:var(--ok-soft);color:var(--ok)}
+.pill.no{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.msg{max-width:300px;cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.msg.open{-webkit-line-clamp:unset;display:block}
+.muted{color:var(--muted)} .faint{color:var(--faint);font-size:12.5px}
+.owner{display:flex;flex-direction:column;gap:5px;min-width:190px}
+.owner .row{display:flex;gap:6px}
+.owner select{flex:1;min-width:0;border:1px solid var(--line-strong);border-radius:6px;padding:4px 6px;background:var(--surface)}
+.owner .nm{font-weight:500}
+.owner .meta{display:flex;gap:10px;flex-wrap:wrap}
+.rca{display:flex;flex-direction:column;gap:4px;min-width:170px}
+.rca a.file{display:inline-flex;align-items:center;gap:6px;font-weight:500;text-decoration:none;max-width:200px}
+.rca a.file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att{display:flex;align-items:center;gap:6px}
+.att a,.att button.dl{font-weight:500;text-decoration:none;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:none;background:none;padding:0;color:var(--accent);cursor:pointer;font-size:13.5px}
+.linkform{display:flex;flex-direction:column;gap:5px}
+.linkform input{border:1px solid var(--line-strong);border-radius:6px;padding:5px 7px;background:var(--surface);min-width:0;font-size:13px}
+.linkform .row{display:flex;gap:6px}
+.att .x{border:none;background:none;color:var(--faint);cursor:pointer;padding:0 2px;font-size:14px;line-height:1}
+.ext{font-size:10.5px;font-weight:600;border-radius:4px;padding:0 4px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.mail{font-size:12.5px} .mail.ok{color:var(--ok)} .mail.bad{color:var(--bad)} .mail.warn{color:var(--warn)}
+button.tagbtn{border:none;background:none;padding:0;cursor:pointer;text-align:left}
+button.tagbtn:hover .pill{outline:1px solid var(--accent)}
+.tat{white-space:nowrap;font-weight:500}
+.tat.ok{color:var(--ok)} .tat.warn{color:var(--warn)} .tat.bad{color:var(--bad)}
+.tat small{display:block;font-weight:400;color:var(--faint);font-size:12px}
+.empty{padding:48px 20px;text-align:center;color:var(--muted)}
+.empty h2{font-size:17px;color:var(--ink);margin:0 0 6px;font-weight:600}
+
+.pop{position:fixed;z-index:50;background:var(--surface);border:1px solid var(--line-strong);border-radius:9px;box-shadow:var(--shadow);width:260px;max-width:calc(100vw - 24px);display:flex;flex-direction:column;max-height:min(380px,70vh)}
+.pop input{margin:8px;border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;background:var(--surface)}
+.pop ul{list-style:none;margin:0;padding:0 4px 6px;overflow:auto}
+.pop li button{width:100%;text-align:left;border:none;background:none;padding:6px 8px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;gap:10px}
+.pop li button:hover{background:var(--surface-2)}
+.pop li button[aria-checked="true"]{background:var(--accent-soft);font-weight:600}
+.pop li .c{color:var(--faint);font-size:12px}
+.pop .hint{padding:0 12px 8px;font-size:12px;color:var(--faint)}
+
+dialog{border:none;border-radius:12px;padding:0;box-shadow:var(--shadow);background:var(--surface);color:var(--ink);width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 40px)}
+dialog::backdrop{background:rgba(10,14,20,.45)}
+.dlg{padding:20px 22px;display:flex;flex-direction:column;gap:14px;overflow:auto;max-height:calc(100dvh - 40px)}
+.dlg h2{margin:0;font-size:18px;font-weight:600}
+.dlg h3{margin:6px 0 0;font-size:14px;font-weight:600}
+.dlg p{margin:0;color:var(--muted)}
+.dlg .foot{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12.5px;font-weight:500;color:var(--muted)}
+.field input,.field select{border:1px solid var(--line-strong);border-radius:7px;padding:7px 9px;background:var(--surface)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px}
+.olist{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.olist .o{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.olist .o:last-child{border-bottom:none}
+.olist .o .e{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.addrow{display:grid;grid-template-columns:1fr 1.3fr auto;gap:8px}
+@media (max-width:560px){.addrow{grid-template-columns:1fr}}
+.addrow input{border:1px solid var(--line-strong);border-radius:7px;padding:7px 9px;background:var(--surface);min-width:0}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:calc(100vw - 24px)}
+.toast a,.toast button{color:var(--bg);font-weight:600}
+.toast button{background:none;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px 9px;cursor:pointer}
+.toast a{border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px 9px;text-decoration:none}
+:root[data-theme="dark"] .toast a,:root[data-theme="dark"] .toast button{border-color:rgba(0,0,0,.3)}
+.gate{min-height:70vh;display:flex;align-items:center;justify-content:center}
+.gate .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;max-width:420px;display:flex;flex-direction:column;gap:12px}
+.gate h2{margin:0;font-size:19px} .gate p{margin:0;color:var(--muted)}
+.who{color:var(--muted);font-size:12.5px;align-self:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="gate" id="gate" hidden><div class="card"><h2>HomeRun CS ticket tracker</h2><p id="gateMsg">Enter the tracker’s access key. You only need to do this once on this browser.</p><input id="keyInput" type="password" autocomplete="off" placeholder="Access key" style="border:1px solid var(--line-strong);border-radius:7px;padding:8px 10px;background:var(--surface)"><button class="btn primary" id="btnKey" type="button">Open tracker</button></div></div>
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1>CS ticket tracker</h1>
+      <p class="sub" id="subline">Freshchat conversations, product owner assignment and RCA</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnSettings" type="button">Product owners &amp; settings</button>
+      <button class="btn primary" id="btnImport" type="button">Import Freshchat export</button>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Date range" id="rangeSeg">
+      <button type="button" data-r="today">Today</button>
+      <button type="button" data-r="week" aria-pressed="true">This week</button>
+      <button type="button" data-r="30">Last 30 days</button>
+      <button type="button" data-r="all">All</button>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Search order ID or what the customer said">
+    <div class="active-filters" id="activeFilters"></div>
+  </div>
+
+  <div class="tally" id="tally"></div>
+
+  <div class="tablebox">
+    <table>
+      <thead><tr id="headRow"></tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+    <div id="emptyBox"></div>
+  </div>
+</div>
+
+
+<dialog id="dlgImport"><div class="dlg" id="importBody"></div></dialog>
+<dialog id="dlgSettings"><div class="dlg" id="settingsBody"></div></dialog>
+
+<script>
+(function(){
+"use strict";
+/* ---------- helpers ---------- */
+function el(tag, attrs, kids){
+  var n=document.createElement(tag);
+  if(attrs) for(var k in attrs){var v=attrs[k]; if(v==null||v===false) continue;
+    if(k==="class") n.className=v; else if(k==="text") n.textContent=v;
+    else if(k.slice(0,2)==="on") n.addEventListener(k.slice(2),v); else n.setAttribute(k,v===true?"":v);}
+  (kids||[]).forEach(function(c){ if(c==null) return; n.appendChild(typeof c==="string"?document.createTextNode(c):c); });
+  return n;
+}
+function $(id){return document.getElementById(id)}
+var NONE="__none", UNASSIGNED="__unassigned";
+var CFG=window.TRACKER_CONFIG||{};
+var BASE_URL=CFG.appUrl||location.href.split("#")[0], TRACKER_URL=BASE_URL;
+var L1_LIST=["After Sales Query","App & Tech Issues","Delivered Product Issue","Delivery","HomeRun Related Queries","Order Mgmt","Payments & Invoicing","Pre Order Queries","Return or Refund"];
+var L2_LIST=["Add GST - Convert to B2B Invoice","App crash / not loading","Cancel Order (Duplicate Order)","Cancel order (after dispatch)","Cancel order (before dispatch)","Change delivery address","Checkout / payment failure","DP misconduct / behaviour Critical","Damaged Items received","Delivery Address - Minor Variation","Delivery area / serviceability check","Delivery charge query","Discount / offer / coupon inquiry","Double Payment done by CX","Invoice Correction apart from GST change","Invoice not received - requesting invoice","Modify order (add / remove / change)","Order confirmation / status check","Payment deducted - Not Updated in Shopify","Payment method change request","Poor Product Quality","Poor quality / expired / substandard","Post-delivery product guidance","Price / B2B Price inquiry","Price discrepancy on order","Product Addition Request","Product availability / stock check","Product specs / brand / dimensions","Receiver Number added/updated","Refund status / follow-up","Reschedule Delivery","Return / exchange request","Returned at Delivery","Updated amount payment link requested","Vendor / B2B / partnership inquiry","WISMO","WISMO Delayed - Critical","WISMO Immediate","Warranty query","Wrong item received"];
+function normKey(v){ return String(v).toLowerCase().replace(/\s+/g," ").trim(); }
+var CANON={}; L1_LIST.concat(L2_LIST).forEach(function(v){ CANON[normKey(v)]=v; });
+function canon(v){ var c=clean(v); if(!c||/^\(?blank\)?$/i.test(c)) return ""; return CANON[normKey(c)]||c.replace(/\s+/g," "); }
+var EXT_TYPES={pdf:"application/pdf",csv:"text/csv",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",
+  xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",xls:"application/vnd.ms-excel",
+  docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"};
+var ASSET_OK={pdf:1,csv:1,png:1,jpg:1,jpeg:1};
+function extOf(n){ var m=String(n).toLowerCase().match(/\.([a-z0-9]+)$/); return m?m[1]:""; }
+function blank(v){ if(v==null) return true; var s=String(v).trim().toLowerCase(); return s===""||s==="-"||s==="—"||s==="null"||s==="na"||s==="n/a"||s==="none"||s==="undefined"; }
+function clean(v){ return blank(v)?"":String(v).trim(); }
+function fmtDur(ms){ if(ms<0) ms=0; var m=Math.round(ms/60000); if(m<60) return m+"m"; var h=Math.floor(m/60); if(h<24) return h+"h "+(m%60)+"m"; var d=Math.floor(h/24); return d+"d "+(h%24)+"h"; }
+var dFmt=new Intl.DateTimeFormat("en-IN",{day:"numeric",month:"short"});
+var tFmt=new Intl.DateTimeFormat("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
+var dtFmt=new Intl.DateTimeFormat("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:true});
+function safeId(s){ return String(s).replace(/[^A-Za-z0-9_\-~:@+]/g,"_").slice(0,150); }
+function hash(s){ var h=2166136261; for(var i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return (h>>>0).toString(36); }
+function parseDate(v){
+  if(v==null) return null; var s=String(v).trim(); if(!s) return null;
+  if(/^\d{10,13}$/.test(s)){ var n=Number(s); return new Date(s.length===10?n*1000:n); }
+  var m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?)?/);
+  if(m){ var y=Number(m[3]); if(y<100) y+=2000; var hh=Number(m[4]||0); var ap=m[7]; if(ap){ ap=ap.toLowerCase(); if(ap==="pm"&&hh<12) hh+=12; if(ap==="am"&&hh===12) hh=0; }
+    var d=new Date(y,Number(m[2])-1,Number(m[1]),hh,Number(m[5]||0),Number(m[6]||0)); return isNaN(d)?null:d; }
+  var d2=new Date(s.replace(/^(\d{4}-\d{2}-\d{2}) /,"$1T")); return isNaN(d2)?null:d2;
+}
+function parseActive(v){ if(blank(v)) return ""; var s=String(v).trim().toLowerCase(); if(/^(y|yes|true|1|active)$/.test(s)) return "Yes"; if(/^(n|no|false|0|inactive)$/.test(s)) return "No"; return String(v).trim(); }
+
+/* ---------- state ---------- */
+var S={linkOpen:{},db:null,auth:null,user:null,uid:null,canWrite:true,gmailToken:null,gmailExp:0,sending:{},
+  tickets:[],owners:[],settings:{linkTemplate:"",slaHours:48},
+  range:"week",search:"",quick:null,
+  filters:{l1:null,l2:null,channel:null,active:null,owner:null,email:null,rca:null},
+  choice:{},changing:{},openMsg:{},hitLimit:false,loaded:false,unsub:null};
+
+function rangeStart(){
+  var now=new Date(), d=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(S.range==="today") return d;
+  if(S.range==="week"){ var dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d; }
+  if(S.range==="30"){ d.setDate(d.getDate()-29); return d; }
+  return null;
+}
+function ownerOf(t){ if(!t.ownerId) return null; for(var i=0;i<S.owners.length;i++) if(S.owners[i].id===t.ownerId) return S.owners[i]; return {id:t.ownerId,name:t.ownerName||"Removed owner",email:t.ownerEmail||""}; }
+function chatUrl(t){ if(t.chatUrl) return t.chatUrl; if(t.convId&&S.settings.linkTemplate&&S.settings.linkTemplate.indexOf("{id}")>=0) return S.settings.linkTemplate.split("{id}").join(encodeURIComponent(t.convId)); return ""; }
+function atts(t){ return Array.isArray(t.attachments)?t.attachments.slice():[]; }
+function rcaState(t){ if(!t.ownerId) return "notassigned"; return atts(t).length?"attached":"pending"; }
+function overSla(t){ if(!t.assignedAt) return false; var end=t.rcaAt?new Date(t.rcaAt):new Date(); return (end-new Date(t.assignedAt))>S.settings.slaHours*3600000; }
+
+/* ---------- columns & filters ---------- */
+var FILTERS={
+  l1:{label:"L1 (category)",get:function(t){return t.l1||NONE},name:function(v){return v===NONE?"Not tagged":v}},
+  l2:{label:"L2 (sub-category)",get:function(t){return t.l2||NONE},name:function(v){return v===NONE?"Not tagged":v}},
+  channel:{label:"Channel",get:function(t){return t.channel||NONE},name:function(v){return v===NONE?"Unknown":v}},
+  active:{label:"Active order",get:function(t){return t.activeOrder||NONE},name:function(v){return v===NONE?"Not known":v}},
+  owner:{label:"Product owner",get:function(t){return t.ownerId||UNASSIGNED},name:function(v){ if(v===UNASSIGNED) return "Unassigned"; var o=ownerOf({ownerId:v}); return o?o.name:v; }},
+  rca:{label:"RCA",get:function(t){return rcaState(t)},name:function(v){return {notassigned:"Not assigned",pending:"Awaiting RCA",attached:"RCA attached"}[v]||v}},
+  email:{label:"Email",get:function(t){ if(!t.ownerId) return "na"; return (t.emailSentAt||t.emailDraftedAt)?"sent":"notsent"; },name:function(v){return {na:"Not assigned",sent:"Email sent",notsent:"Email not sent"}[v]||v}}
+};
+var COLS=[
+  {key:"when",label:"Date & time"},{key:"l1",label:"L1",f:"l1"},{key:"l2",label:"L2",f:"l2"},
+  {key:"order",label:"Order ID"},{key:"channel",label:"Channel",f:"channel"},{key:"msg",label:"Customer said"},
+  {key:"active",label:"Active order",f:"active"},{key:"chat",label:"Chat"},{key:"owner",label:"Product owner & email",f:"owner"},
+  {key:"rca",label:"RCA attachments",f:"rca"},{key:"tat",label:"RCA TAT"}
+];
+var QUICK=[
+  {k:"all",l:"Chats in range",test:function(){return true}},
+  {k:"untagged",l:"Not tagged",cls:"warn",test:function(t){return !t.l1}},
+  {k:"unassigned",l:"Unassigned",test:function(t){return !t.ownerId}},
+  {k:"noemail",l:"Email not sent",cls:"warn",test:function(t){return t.ownerId&&!t.emailSentAt&&!t.emailDraftedAt}},
+  {k:"pending",l:"Awaiting RCA",cls:"warn",test:function(t){return rcaState(t)==="pending"}},
+  {k:"attached",l:"RCA attached",cls:"ok",test:function(t){return rcaState(t)==="attached"}},
+  {k:"breach",l:"Over TAT target",cls:"bad",test:function(t){return overSla(t)}}
+];
+
+function baseRows(skip){
+  var q=S.search.trim().toLowerCase();
+  return S.tickets.filter(function(t){
+    if(q && (String(t.orderId||"")+" "+String(t.message||"")+" "+String(t.convId||"")).toLowerCase().indexOf(q)<0) return false;
+    for(var k in S.filters){ if(k===skip) continue; var v=S.filters[k]; if(v!=null && FILTERS[k].get(t)!==v) return false; }
+    return true;
+  });
+}
+function visibleRows(){
+  var rows=baseRows(null);
+  if(S.quick && S.quick!=="all"){ var qd=QUICK.filter(function(x){return x.k===S.quick})[0]; rows=rows.filter(qd.test); }
+  return rows;
+}
+
+/* ---------- render ---------- */
+function renderHead(){
+  var tr=$("headRow"); tr.textContent="";
+  COLS.forEach(function(c){
+    var kids=[el("span",{text:c.label})];
+    if(c.f){
+      var on=S.filters[c.f]!=null;
+      kids.push(el("button",{class:"fbtn"+(on?" on":""),type:"button","aria-label":"Filter "+c.label,title:"Filter "+c.label,onclick:function(e){e.stopPropagation(); openFilter(c.f,e.currentTarget);}},[funnel()]));
+    }
+    tr.appendChild(el("th",{scope:"col"},[el("div",{class:"hd"},kids)]));
+  });
+}
+function funnel(){ var s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.setAttribute("width","12"); s.setAttribute("height","12"); s.setAttribute("viewBox","0 0 12 12"); s.setAttribute("aria-hidden","true"); var p=document.createElementNS("http://www.w3.org/2000/svg","path"); p.setAttribute("d","M1 2h10L7 6.5V10L5 11V6.5z"); p.setAttribute("fill","currentColor"); s.appendChild(p); return s; }
+
+function renderTally(){
+  var base=baseRows(null), box=$("tally"); box.textContent="";
+  QUICK.forEach(function(q){
+    var n=base.filter(q.test).length, pressed=(S.quick||"all")===q.k;
+    box.appendChild(el("button",{type:"button",class:q.cls||"","aria-pressed":pressed?"true":"false",onclick:function(){S.quick=(q.k==="all"||S.quick===q.k)?null:q.k; render();}},
+      [el("span",{class:"n",text:String(n)}),el("span",{class:"l",text:q.k==="breach"?q.l+" ("+S.settings.slaHours+"h)":q.l})]));
+  });
+}
+function renderChips(){
+  var box=$("activeFilters"); box.textContent="";
+  Object.keys(S.filters).forEach(function(k){ var v=S.filters[k]; if(v==null) return;
+    box.appendChild(el("span",{class:"fchip"},[FILTERS[k].label.replace(/ \(.*\)/,"")+": "+FILTERS[k].name(v),
+      el("button",{type:"button","aria-label":"Clear filter",onclick:function(){S.filters[k]=null; if(k==="l1") S.filters.l2=null; render();}},["×"])]));
+  });
+}
+function catPill(v){ return v?el("span",{class:"pill cat",text:v}):el("span",{class:"pill none",text:"Not tagged"}); }
+function tagCell(t,k){
+  var p=catPill(t[k]); if(!S.canWrite||!S.db) return p;
+  return el("button",{type:"button",class:"tagbtn",title:"Change "+(k==="l1"?"L1":"L2"),onclick:function(e){e.stopPropagation(); openTag(t,k,e.currentTarget);}},[p]);
+}
+
+function rowEl(t){
+  var d=t.createdAt?new Date(t.createdAt):null, url=chatUrl(t), own=ownerOf(t), id=t.id;
+  var tds=[];
+  tds.push(el("td",{class:"when"},d?[el("div",{class:"d",text:dFmt.format(d)}),el("div",{class:"t",text:tFmt.format(d)})]:["—"]));
+  tds.push(el("td",null,[tagCell(t,"l1")]));
+  tds.push(el("td",null,[tagCell(t,"l2")]));
+  tds.push(el("td",null,[t.orderId?el("span",{text:t.orderId}):el("span",{class:"faint",text:"No order ID"})]));
+  tds.push(el("td",null,[t.channel?el("span",{text:t.channel}):el("span",{class:"faint",text:"Unknown"})]));
+  var msg=el("div",{class:"msg"+(S.openMsg[id]?" open":""),title:"Click to expand",text:t.message||"—",onclick:function(e){S.openMsg[id]=!S.openMsg[id]; e.currentTarget.classList.toggle("open");}});
+  tds.push(el("td",null,[msg]));
+  var a=t.activeOrder; tds.push(el("td",null,[a==="Yes"?el("span",{class:"pill yes",text:"Active"}):a==="No"?el("span",{class:"pill no",text:"Not active"}):el("span",{class:"faint",text:a||"Not known"})]));
+  tds.push(el("td",null,[url?el("a",{href:url,target:"_blank",rel:"noopener noreferrer",text:"Open chat"}):el("span",{class:"faint",text:t.convId?"Set link format":"No link"})]));
+  tds.push(el("td",null,[ownerCell(t,own,url)]));
+  tds.push(el("td",null,[rcaCell(t)]));
+  tds.push(el("td",null,[tatCell(t)]));
+  return el("tr",{"data-id":id},tds);
+}
+function ownerCell(t,own,url){
+  var id=t.id, box=el("div",{class:"owner"});
+  if(own && !S.changing[id]){
+    box.appendChild(el("span",{class:"nm",text:own.name}));
+    box.appendChild(el("span",{class:"faint",text:"Assigned "+(t.assignedAt?dtFmt.format(new Date(t.assignedAt)):"")}));
+    box.appendChild(mailStatus(t,own));
+    var meta=el("div",{class:"meta"});
+    if(own.email && S.canWrite && !S.sending[id]) meta.appendChild(el("button",{class:"btn link",type:"button",text:(t.emailSentAt||t.emailDraftedAt)?"Send again":"Send email",onclick:function(){ sendEmail(t,own); }}));
+    if(S.canWrite) meta.appendChild(el("button",{class:"btn link",type:"button",text:"Change",onclick:function(){S.changing[id]=true; S.choice[id]=t.ownerId; render();}}));
+    box.appendChild(meta); return box;
+  }
+  if(!S.canWrite){ box.appendChild(el("span",{class:"faint",text:"Unassigned"})); return box; }
+  if(!S.owners.length){ box.appendChild(el("button",{class:"btn link",type:"button",text:"Add product owners first",onclick:openSettings})); return box; }
+  var sel=el("select",{"aria-label":"Product owner",onchange:function(e){S.choice[id]=e.target.value; btn.disabled=!e.target.value;}},
+    [el("option",{value:"",text:"Choose owner"})].concat(S.owners.map(function(o){ return el("option",{value:o.id,text:o.name,selected:S.choice[id]===o.id}); })));
+  var btn=el("button",{class:"btn small primary",type:"button",text:"Confirm",disabled:!S.choice[id],onclick:function(){confirmAssign(t,btn);}});
+  var row=el("div",{class:"row"},[sel,btn]); box.appendChild(row);
+  if(S.changing[id]) box.appendChild(el("button",{class:"btn link",type:"button",text:"Cancel",onclick:function(){delete S.changing[id]; render();}}));
+  return box;
+}
+function linkKind(u){ u=String(u||"");
+  if(/docs\.google\.com\/spreadsheets/.test(u)) return "SHEET";
+  if(/docs\.google\.com\/document/.test(u)) return "DOC";
+  if(/docs\.google\.com\/presentation/.test(u)) return "SLIDES";
+  if(/drive\.google\.com\/drive\/(u\/\d+\/)?folders/.test(u)) return "FOLDER";
+  if(/drive\.google\.com/.test(u)) return "DRIVE";
+  return "LINK"; }
+function rcaCell(t){
+  var box=el("div",{class:"rca"}), id=t.id;
+  if(!t.ownerId){ box.appendChild(el("span",{class:"faint",text:"Assign an owner first"})); return box; }
+  var list=atts(t);
+  list.forEach(function(a){
+    var link=a.url?el("a",{href:a.url,target:"_blank",rel:"noopener noreferrer",title:a.url,text:a.name||"RCA link"}):el("span",{class:"faint",text:a.name});
+    box.appendChild(el("div",{class:"att"},[el("span",{class:"ext",text:linkKind(a.url)}),link,
+      S.canWrite?el("button",{class:"x",type:"button","aria-label":"Remove "+(a.name||"link"),title:"Remove",onclick:function(){ removeAtt(t,a); }},["×"]):null]));
+  });
+  if(list.length && t.rcaAt) box.appendChild(el("span",{class:"faint",text:"First RCA "+dtFmt.format(new Date(t.rcaAt))}));
+  if(!S.canWrite){ if(!list.length) box.appendChild(el("span",{class:"faint",text:"Awaiting RCA"})); return box; }
+  if(S.linkOpen[id]){
+    var url=el("input",{type:"url",placeholder:"Paste Google Drive link","aria-label":"Google Drive link"});
+    var label=el("input",{type:"text",placeholder:"Name (optional), e.g. RCA - late delivery","aria-label":"Link name"});
+    var save=el("button",{class:"btn small primary",type:"button",text:"Save link",onclick:function(){ addLink(t,url.value,label.value,save); }});
+    url.addEventListener("keydown",function(e){ if(e.key==="Enter") save.click(); });
+    label.addEventListener("keydown",function(e){ if(e.key==="Enter") save.click(); });
+    box.appendChild(el("div",{class:"linkform"},[url,label,el("div",{class:"row"},[save,el("button",{class:"btn small",type:"button",text:"Cancel",onclick:function(){ delete S.linkOpen[id]; render(); }})])]));
+    setTimeout(function(){ url.focus(); },0);
+  } else {
+    box.appendChild(el("button",{class:list.length?"btn link":"btn small",type:"button",text:list.length?"Add another link":"Add RCA Drive link",onclick:function(){ S.linkOpen[id]=true; render(); }}));
+  }
+  return box;
+}
+function tatCell(t){
+  if(!t.assignedAt) return el("span",{class:"faint",text:"—"});
+  var start=new Date(t.assignedAt), sla=S.settings.slaHours*3600000;
+  if(t.rcaAt){ var ms=new Date(t.rcaAt)-start; return el("span",{class:"tat "+(ms>sla?"bad":"ok")},[fmtDur(ms),el("small",{text:ms>sla?"Over target":"Within target"})]); }
+  var run=Date.now()-start; return el("span",{class:"tat "+(run>sla?"bad":"warn"),"data-running":t.assignedAt},[fmtDur(run),el("small",{text:run>sla?"Open, over target":"Open"})]);
+}
+
+function render(){
+  // drop an L2 filter that no longer matches the chosen L1
+  renderHead(); renderChips(); renderTally();
+  var rows=visibleRows(), body=$("body"); body.textContent="";
+  var frag=document.createDocumentFragment(); rows.forEach(function(t){frag.appendChild(rowEl(t));}); body.appendChild(frag);
+  var eb=$("emptyBox"); eb.textContent="";
+  if(!S.loaded && S.db){ eb.appendChild(el("div",{class:"empty",text:"Loading tickets…"})); }
+  else if(!S.tickets.length){
+    eb.appendChild(el("div",{class:"empty"},[el("h2",{text:S.range==="week"?"No chats for this week yet":"No chats in this range"}),
+      el("p",{text:"Import a Freshchat conversation export to backfill from Monday onward. Re-importing later adds new chats and keeps every assignment and RCA."}),
+      S.canWrite&&S.db?el("button",{class:"btn primary",type:"button",text:"Import Freshchat export",onclick:openImport}):null]));
+  } else if(!rows.length){
+    eb.appendChild(el("div",{class:"empty"},[el("h2",{text:"No chats match these filters"}),el("button",{class:"btn",type:"button",text:"Clear filters",onclick:function(){for(var k in S.filters) S.filters[k]=null; S.quick=null; S.search=""; $("search").value=""; render();}})]));
+  }
+  var sub=$("subline"); var rs=rangeStart();
+  sub.textContent=(rs?"From "+new Intl.DateTimeFormat("en-IN",{weekday:"short",day:"numeric",month:"short"}).format(rs)+" to now":"All imported chats")+", showing "+rows.length+" of "+S.tickets.length;
+  renderBanner();
+}
+function renderBanner(){
+  var b=$("banner"); b.textContent="";
+
+  if(S.hitLimit) b.appendChild(el("div",{class:"banner warn",text:"Showing the latest 3,000 chats in this range. Narrow the date range to see older ones."}));
+  if(S.db && !S.canWrite) b.appendChild(el("div",{class:"banner",text:"You have view access, so assigning and attaching RCAs is turned off for you."}));
+}
+
+/* ---------- filter popover ---------- */
+var pop=null;
+function closePop(){ if(pop){pop.remove(); pop=null;} }
+function openFilter(k,anchor){
+  closePop();
+  var counts={}; baseRows(k).forEach(function(t){ var v=FILTERS[k].get(t); counts[v]=(counts[v]||0)+1; });
+  if(k==="owner") S.owners.forEach(function(o){ if(!(o.id in counts)) counts[o.id]=0; });
+  if(k==="l1"||k==="l2"){ if(!(NONE in counts)) counts[NONE]=0; if(!(k==="l2"&&S.filters.l1)) (k==="l1"?L1_LIST:L2_LIST).forEach(function(v){ if(!(v in counts)) counts[v]=0; }); }
+  var vals=Object.keys(counts).sort(function(a,b){ var sa=a===NONE||a===UNASSIGNED, sb=b===NONE||b===UNASSIGNED; if(sa!==sb) return sa?-1:1; return FILTERS[k].name(a).localeCompare(FILTERS[k].name(b)); });
+  var cur=S.filters[k], list=el("ul",{role:"listbox"});
+  function item(v,label,c){ return el("li",null,[el("button",{type:"button",role:"option","aria-checked":(cur===v)?"true":"false",onclick:function(){ S.filters[k]=v; if(k==="l1") S.filters.l2=null; closePop(); render(); }},[el("span",{text:label}),c!=null?el("span",{class:"c",text:String(c)}):null])]); }
+  function fill(q){ list.textContent=""; list.appendChild(item(null,"All",null)); vals.forEach(function(v){ var nm=FILTERS[k].name(v); if(q && nm.toLowerCase().indexOf(q)<0) return; list.appendChild(item(v,nm,counts[v])); }); }
+  var inp=el("input",{type:"search",placeholder:"Search "+FILTERS[k].label,oninput:function(e){fill(e.target.value.trim().toLowerCase());}});
+  pop=el("div",{class:"pop",role:"dialog","aria-label":"Filter "+FILTERS[k].label},[inp,(k==="l2"&&S.filters.l1)?el("div",{class:"hint",text:"Showing sub-categories under "+FILTERS.l1.name(S.filters.l1)}):null,list]);
+  fill(""); document.body.appendChild(pop);
+  var r=anchor.getBoundingClientRect(), w=pop.offsetWidth;
+  pop.style.left=Math.max(12,Math.min(window.innerWidth-w-12,r.left-8))+"px";
+  var top=r.bottom+6, h=pop.offsetHeight; if(top+h>window.innerHeight-12) top=Math.max(12,r.top-h-6); pop.style.top=top+"px";
+  inp.focus();
+}
+function openTag(t,k,anchor){
+  closePop();
+  var vals=[""].concat(k==="l1"?L1_LIST:L2_LIST), list=el("ul",{role:"listbox"});
+  function fill(q){ list.textContent=""; vals.forEach(function(v){ var nm=v||"Not tagged"; if(q&&nm.toLowerCase().indexOf(q)<0) return;
+    list.appendChild(el("li",null,[el("button",{type:"button",role:"option","aria-checked":(t[k]||"")===v?"true":"false",onclick:function(){
+      closePop(); var patch={tagManual:true}; patch[k]=v;
+      S.db.collection("tickets").doc(t.id).update(patch).catch(function(e){ toast(errText(e,"Couldn’t save the tag.")); });
+    }},[el("span",{text:nm})])])); }); }
+  var inp=el("input",{type:"search",placeholder:"Search "+(k==="l1"?"categories":"sub-categories"),oninput:function(e){fill(e.target.value.trim().toLowerCase());}});
+  pop=el("div",{class:"pop",role:"dialog","aria-label":"Set "+(k==="l1"?"L1":"L2")},[inp,el("div",{class:"hint",text:"Set "+(k==="l1"?"L1 category":"L2 sub-category")+" for this chat"}),list]);
+  fill(""); document.body.appendChild(pop);
+  var r=anchor.getBoundingClientRect(), w=pop.offsetWidth;
+  pop.style.left=Math.max(12,Math.min(window.innerWidth-w-12,r.left-8))+"px";
+  var top=r.bottom+6, h=pop.offsetHeight; if(top+h>window.innerHeight-12) top=Math.max(12,r.top-h-6); pop.style.top=top+"px";
+  inp.focus();
+}
+document.addEventListener("mousedown",function(e){ if(pop && !pop.contains(e.target)) closePop(); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") closePop(); });
+window.addEventListener("resize",closePop);
+document.querySelector(".tablebox").addEventListener("scroll",closePop);
+
+/* ---------- assignment & email ---------- */
+function emailParts(t,own){
+  var url=chatUrl(t);
+  var subj="RCA needed: "+(t.l1||"Not tagged")+(t.l2?" / "+t.l2:"")+(t.orderId?" (order "+t.orderId+")":"");
+  var lines=["Hi "+String(own.name).split(" ")[0]+",","","A customer chat has been assigned to you for RCA.","",
+    "Freshchat link: "+(url||"(link not available)"),
+    "Order ID: "+(t.orderId||"None"),
+    "Category (L1): "+(t.l1||"Not tagged"),
+    "Sub-category (L2): "+(t.l2||"Not tagged"),
+    "Channel: "+(t.channel||"Unknown"),
+    "Active order: "+(t.activeOrder||"Not known"),
+    "Chat started: "+(t.createdAt?dtFmt.format(new Date(t.createdAt)):"Unknown"),
+    "","Customer said:","\u201C"+String(t.message||"").slice(0,600)+"\u201D","",
+    "Once it’s fixed, upload your RCA (PDF or Excel) to Google Drive, share it with HomeRun, and paste the Drive link on this chat’s row in the CS ticket tracker:",TRACKER_URL,"",
+    "RCA TAT target: "+S.settings.slaHours+" hours from now.","","Thanks"];
+  return {subject:subj,body:lines.join("\n")};
+}
+function mailto(t,own){ var p=emailParts(t,own); return "mailto:"+encodeURIComponent(own.email)+"?subject="+encodeURIComponent(p.subject)+"&body="+encodeURIComponent(p.body); }
+function mailStatus(t,own){
+  if(S.sending[t.id]) return el("span",{class:"mail warn",text:"Sending email…"});
+  if(t.emailSentAt) return el("span",{class:"mail ok",text:"Email sent "+dtFmt.format(new Date(t.emailSentAt))});
+  if(t.emailDraftedAt) return el("span",{class:"mail ok",text:"Email opened in mail app "+dtFmt.format(new Date(t.emailDraftedAt))});
+  if(t.emailError==="unconfirmed") return el("span",{class:"mail warn",text:"Gmail didn’t confirm; check Sent before resending"});
+  if(t.emailError) return el("span",{class:"mail bad",text:"Email not sent"});
+  return el("span",{class:"mail faint",text:own.email?"Email not sent yet":"No email address"});
+}
+function fallbackActions(t,own){
+  var acts=[];
+  if(own.email) acts.push(el("a",{href:mailto(t,own),target:"_blank",rel:"noopener",text:"Open in mail app"}));
+  acts.push(el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(t,own).body,e.currentTarget); }}));
+  return acts;
+}
+var GMAIL_SCOPE="https://www.googleapis.com/auth/gmail.send";
+function gmailAuto(){ return !!CFG.googleClientId; }
+/* Must be called directly from a click so the Google popup isn't blocked. */
+function gmailToken(){
+  if(S.gmailToken && Date.now()<S.gmailExp) return Promise.resolve(S.gmailToken);
+  return new Promise(function(res,rej){
+    if(!window.google||!google.accounts||!google.accounts.oauth2){ rej({code:"gis_missing"}); return; }
+    var tc=google.accounts.oauth2.initTokenClient({client_id:CFG.googleClientId,scope:GMAIL_SCOPE,
+      callback:function(r){ if(r.error){ rej({code:"auth/"+r.error}); return; } S.gmailToken=r.access_token; S.gmailExp=Date.now()+Math.max(60,(Number(r.expires_in)||3600)-300)*1000; res(r.access_token); },
+      error_callback:function(e){ var ty=e&&e.type; rej({code:ty==="popup_closed"?"auth/popup-closed-by-user":ty==="popup_failed_to_open"?"auth/popup-blocked":"auth/error"}); }});
+    tc.requestAccessToken();
+  });
+}
+function openMail(href){ var a=el("a",{href:href,style:"display:none"}); document.body.appendChild(a); a.click(); a.remove(); }
+function b64utf8(str){ var bytes=new TextEncoder().encode(str), bin=""; for(var i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192)); return btoa(bin); }
+function b64url(str){ return str.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function gmailSend(token,to,subject,body){
+  var raw=["To: "+to,"Subject: =?UTF-8?B?"+b64utf8(subject)+"?=","MIME-Version: 1.0","Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: base64","",b64utf8(body).replace(/.{76}/g,"$&\r\n")].join("\r\n");
+  return fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({raw:b64url(b64utf8(raw))})})
+    .then(function(r){ if(r.ok) return r.json(); return r.json().catch(function(){return {};}).then(function(j){ throw {code:"http_"+r.status,message:(j.error&&j.error.message)||""}; }); },function(){ throw {code:"network"}; });
+}
+function sendEmail(t,own,tokenPromise){
+  if(!own.email){ toast("Add an email address for "+own.name+" in settings."); return Promise.resolve(); }
+  var p=emailParts(t,own), ref=S.db.collection("tickets").doc(t.id);
+  if(!gmailAuto()){
+    openMail(mailto(t,own));
+    toast("Your mail app opened with the email to "+own.name+". Press send there.",[el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(p.body,e.currentTarget); }})],10000);
+    return ref.update({emailDraftedAt:new Date().toISOString(),emailTo:own.email,emailError:null}).catch(function(){});
+  }
+  S.sending[t.id]=true; render();
+  return (tokenPromise||gmailToken()).then(function(tok){ return gmailSend(tok,own.email,p.subject,p.body); }).then(function(){
+    delete S.sending[t.id];
+    return ref.update({emailSentAt:new Date().toISOString(),emailTo:own.email,emailBy:S.uid||null,emailError:null}).then(function(){ toast("Assigned to "+own.name+" and emailed "+own.email+"."); });
+  },function(e){
+    delete S.sending[t.id];
+    var c=e&&e.code, msg, code=c||"error";
+    if(c==="http_401"){ S.gmailToken=null; msg="Gmail access expired. Click Send email to allow it again, or send it yourself:"; }
+    else if(c==="gis_missing") msg="Google’s sign-in script didn’t load. Reload the page, or send it yourself:";
+    else if(c==="http_403") msg="Google didn’t allow sending from your account"+(e.message?" ("+String(e.message).slice(0,120)+")":"")+". Send it yourself:";
+    else if(c==="auth/popup-blocked") msg="Your browser blocked the Google sign-in window. Allow pop-ups for this site and click Send email, or send it yourself:";
+    else if(c==="auth/popup-closed-by-user"||c==="auth/access_denied") msg="Gmail permission was cancelled, so the email wasn’t sent. Click Send email to try again, or send it yourself:";
+    else if(c==="network"||c==="http_500"||c==="http_503"){ msg="Gmail didn’t confirm the send. Check your Sent folder before sending again."; code="unconfirmed"; }
+    else msg="The email wasn’t sent. Send it yourself:";
+    toast(msg,code==="unconfirmed"?null:fallbackActions(t,own),16000);
+    return ref.update({emailError:code}).catch(function(){}).then(render);
+  });
+}
+function confirmAssign(t,btn){
+  var oid=S.choice[t.id]; var o=S.owners.filter(function(x){return x.id===oid})[0]; if(!o) return;
+  var tokenP=null, drafted=null;
+  if(o.email && gmailAuto()){ tokenP=gmailToken(); tokenP.catch(function(){}); }
+  var patch0={ownerId:o.id,ownerName:o.name,ownerEmail:o.email,assignedAt:new Date().toISOString()};
+  if(o.email && !gmailAuto()){ openMail(mailto(Object.assign({},t,patch0),o)); drafted=new Date().toISOString(); }
+  btn.disabled=true; btn.textContent="Saving…";
+  var patch=Object.assign(patch0,{assignedBy:null,emailSentAt:null,emailDraftedAt:drafted,emailTo:drafted?o.email:null,emailError:null});
+  if(t.ownerId && t.ownerId!==o.id){ patch.previousOwnerId=t.ownerId; }
+  S.db.collection("tickets").doc(t.id).update(patch).then(function(){
+    delete S.changing[t.id]; delete S.choice[t.id];
+    if(drafted){ toast("Assigned to "+o.name+". Your mail app opened with the email; press send there.",[el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(Object.assign({},t,patch),o).body,e.currentTarget); }})],10000); return; }
+    if(!o.email){ toast("Assigned to "+o.name+". Add their email in settings to notify them."); return; }
+    return sendEmail(Object.assign({},t,patch),o,tokenP||undefined);
+  }).catch(function(e){ btn.disabled=false; btn.textContent="Confirm"; toast(errText(e,"Couldn’t save the assignment.")); });
+}
+function copy(text,btn){
+  function ok(){ btn.textContent="Copied"; }
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok,fallback); else fallback();
+  function fallback(){ var ta=el("textarea",{style:"position:fixed;opacity:0"}); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand("copy"); ok();}catch(_){} ta.remove(); }
+}
+function errText(e,base){ var c=e&&e.code; if(c==="permission-denied") return base+" The access key isn’t valid."; if(c==="resource-exhausted") return base+" The free daily limit was reached; it resets tomorrow."; return base+" Try again."; }
+
+/* ---------- RCA upload ---------- */
+function addLink(t,rawUrl,rawLabel,btn){
+  var u=String(rawUrl||"").trim(), name=String(rawLabel||"").trim().slice(0,120);
+  if(!/^https:\/\/[^\s]+$/i.test(u)){ toast("Paste a full link starting with https://"); return; }
+  try{ new URL(u); }catch(_){ toast("That doesn’t look like a valid link."); return; }
+  if(!name){ var k=linkKind(u); name={SHEET:"RCA sheet",DOC:"RCA doc",SLIDES:"RCA slides",FOLDER:"RCA folder",DRIVE:"RCA file",LINK:"RCA link"}[k]; }
+  btn.disabled=true;
+  var cur=S.tickets.filter(function(x){return x.id===t.id;})[0]||t, now=new Date().toISOString();
+  var item={id:"l"+Date.now().toString(36),url:u,name:name,at:now,by:S.uid||null};
+  var patch={attachments:atts(cur).concat([item])};
+  if(!cur.rcaAt) patch.rcaAt=now;
+  if(!cur.rcaBy) patch.rcaBy=S.uid||null;
+  S.db.collection("tickets").doc(t.id).update(patch).then(function(){ delete S.linkOpen[t.id]; toast("RCA link saved."); render(); })
+    .catch(function(e){ btn.disabled=false; toast(errText(e,"Couldn’t save the link.")); });
+}
+function removeAtt(t,a){
+  if(!confirm("Remove "+(a.name||"this link")+" from this chat?")) return;
+  var rest=atts(t).filter(function(x){return x.id!==a.id;});
+  var patch={attachments:rest};
+  if(!rest.length){ patch.rcaAt=null; patch.rcaBy=null; }
+  S.db.collection("tickets").doc(t.id).update(patch).catch(function(e){ toast(errText(e,"Couldn’t remove the file.")); });
+}
+
+/* ---------- toast ---------- */
+var toastEl=null,toastTimer=null;
+function toast(msg,actions,ms){
+  if(toastEl) toastEl.remove(); clearTimeout(toastTimer);
+  toastEl=el("div",{class:"toast",role:"status"},[el("span",{text:msg})].concat(actions||[]).concat([el("button",{type:"button","aria-label":"Dismiss",text:"×",onclick:function(){toastEl.remove(); toastEl=null;}})]));
+  document.body.appendChild(toastEl); toastTimer=setTimeout(function(){ if(toastEl){toastEl.remove(); toastEl=null;} },ms||4000);
+}
+
+/* ---------- settings ---------- */
+function openSettings(){
+  var b=$("settingsBody"); b.textContent="";
+  var list=el("div",{class:"olist"});
+  function fillOwners(){ list.textContent="";
+    if(!S.owners.length) list.appendChild(el("div",{class:"o"},[el("span",{class:"muted",text:"No product owners yet."})]));
+    S.owners.forEach(function(o){ list.appendChild(el("div",{class:"o"},[el("div",null,[el("div",{text:o.name}),el("div",{class:"e",text:o.email})]),
+      S.canWrite?el("button",{class:"btn small",type:"button",text:"Remove",onclick:function(){ if(!confirm("Remove "+o.name+"? Tickets already assigned keep their name.")) return; S.db.collection("owners").doc(o.id).delete().catch(function(e){toast(errText(e,"Couldn’t remove."));}); }}):null])); });
+  }
+  fillOwners(); S._fillOwners=fillOwners;
+  var nm=el("input",{placeholder:"Name","aria-label":"Owner name"}), em=el("input",{type:"email",placeholder:"name@homerun.co","aria-label":"Owner email"});
+  var add=el("button",{class:"btn",type:"button",text:"Add owner",onclick:function(){
+    var n=nm.value.trim(), m=em.value.trim(); if(!n||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){ toast("Enter a name and a valid email."); return; }
+    add.disabled=true; S.db.collection("owners").add({name:n,email:m,createdAt:new Date().toISOString()}).then(function(){nm.value=""; em.value=""; add.disabled=false; nm.focus();}).catch(function(e){add.disabled=false; toast(errText(e,"Couldn’t add the owner."));});
+  }});
+  var tpl=el("input",{value:S.settings.linkTemplate||"",placeholder:"https://yourcompany.freshchat.com/a/APP_ID/open/conversation/{id}"});
+  var sla=el("input",{type:"number",min:"1",step:"1",value:String(S.settings.slaHours)});
+  b.appendChild(el("h2",{text:"Product owners & settings"}));
+  b.appendChild(el("h3",{text:"Product owners"}));
+  b.appendChild(el("p",{text:"These people appear in the assignee dropdown and receive the Freshchat link by email."}));
+  b.appendChild(list);
+  if(S.canWrite) b.appendChild(el("div",{class:"addrow"},[nm,em,add]));
+  b.appendChild(el("h3",{text:"Freshchat chat link"}));
+  b.appendChild(el("p",{text:"Used when the export has a conversation ID but no link. Open any chat in Freshchat, copy its address, and replace the conversation ID with {id}."}));
+  b.appendChild(el("div",{class:"field"},[tpl]));
+  b.appendChild(el("div",{class:"grid2"},[el("div",{class:"field"},[el("label",{text:"RCA TAT target (hours)"}),sla])]));
+  b.appendChild(el("div",{class:"foot"},[el("button",{class:"btn",type:"button",text:"Close",onclick:function(){$("dlgSettings").close();}}),
+    S.canWrite?el("button",{class:"btn primary",type:"button",text:"Save settings",onclick:function(e){
+      var v={linkTemplate:tpl.value.trim(),slaHours:Math.max(1,Math.round(Number(sla.value)||48))};
+      e.currentTarget.disabled=true; S.db.doc("config/settings").set(v).then(function(){ toast("Settings saved."); $("dlgSettings").close(); }).catch(function(er){ toast(errText(er,"Couldn’t save settings.")); });
+    }}):null]));
+  $("dlgSettings").showModal();
+}
+$("btnSettings").addEventListener("click",openSettings);
+
+/* ---------- import ---------- */
+var FIELDS=[
+  {k:"convId",l:"Conversation ID",re:/conversation.?id|conv.?id|chat.?id|^id$|ticket.?id/i},
+  {k:"chatUrl",l:"Chat link",re:/url|link/i},
+  {k:"createdAt",l:"Date & time",re:/created|start|date|time/i},
+  {k:"l2",l:"L2 (sub-category)",re:/^l2\b|sub.?cat|sub.?disp|sub.?topic|sub.?reason|level.?2/i},
+  {k:"l1",l:"L1 (category)",re:/^l1\b|categ|dispos|topic|reason|label|level.?1/i},
+  {k:"orderId",l:"Order ID",re:/order/i},
+  {k:"channel",l:"Channel",re:/channel.?name|^channel$|source|medium|platform/i},
+  {k:"message",l:"What the customer said",re:/first.?message|customer.?message|message.?(text|content|parts)|^message$|query|description|text/i},
+  {k:"activeOrder",l:"Active order",re:/active/i}
+];
+function guess(headers){
+  var used={}, map={};
+  FIELDS.forEach(function(f){ for(var i=0;i<headers.length;i++){ var h=headers[i]; if(used[h]) continue; if(f.k==="l1" && /sub/i.test(h)) continue; if(f.k==="chatUrl" && /image|avatar|attach/i.test(h)) continue; if(f.re.test(h)){ map[f.k]=h; used[h]=1; return; } } map[f.k]=""; });
+  return map;
+}
+function openImport(){
+  var b=$("importBody"); b.textContent="";
+  var fileIn=el("input",{type:"file",accept:".csv,text/csv"});
+  b.appendChild(el("h2",{text:"Import Freshchat export"}));
+  b.appendChild(el("p",{text:"In Freshchat, export conversations (or a chat report) as CSV for the dates you need, for example Monday to today, then choose the file here. Chats already in the tracker are updated without touching their owner, email status, tags you set by hand, or RCA links."}));
+  b.appendChild(el("div",{class:"field"},[el("label",{text:"CSV file"}),fileIn]));
+  var stage=el("div"); b.appendChild(stage);
+  b.appendChild(el("div",{class:"foot"},[el("button",{class:"btn",type:"button",text:"Close",onclick:function(){$("dlgImport").close();}})]));
+  fileIn.addEventListener("change",function(){
+    var f=fileIn.files[0]; if(!f) return; stage.textContent="";
+    if(typeof Papa==="undefined"){ stage.appendChild(el("p",{text:"The CSV reader didn’t load. Reload the page and try again."})); return; }
+    Papa.parse(f,{header:true,skipEmptyLines:"greedy",complete:function(res){ var fl=res.meta.fields||[]; if(isTranscript(fl)) showTranscript(stage,res.data); else showMapping(stage,res.data,fl); },error:function(){ stage.appendChild(el("p",{text:"That file couldn’t be read as CSV."})); }});
+  });
+  $("dlgImport").showModal();
+}
+function showMapping(stage,rows,headers){
+  stage.textContent="";
+  if(!rows.length){ stage.appendChild(el("p",{text:"The file has no rows."})); return; }
+  var map=guess(headers), sels={};
+  stage.appendChild(el("h3",{text:rows.length+" rows found. Match the columns"}));
+  stage.appendChild(el("p",{text:"Only matched columns are imported. To add L1/L2 to chats already in the tracker, match just Conversation ID, L1 and L2 and leave the rest as Not in this file."}));
+  var grid=el("div",{class:"grid2"});
+  FIELDS.forEach(function(f){
+    var s=el("select",null,[el("option",{value:"",text:"Not in this file"})].concat(headers.map(function(h){return el("option",{value:h,text:h,selected:map[f.k]===h});})));
+    sels[f.k]=s; grid.appendChild(el("div",{class:"field"},[el("label",{text:f.l+(f.req?" (required)":"")}),s]));
+  });
+  stage.appendChild(grid);
+  var bar=el("div",{class:"bar",hidden:true},[el("i")]), status=el("p",{class:"muted"});
+  var go=el("button",{class:"btn primary",type:"button",text:"Import "+rows.length+" chats",onclick:function(){
+    var m={}; for(var k in sels) m[k]=sels[k].value;
+    if(!m.createdAt && !m.convId){ status.textContent="Match the Date & time or Conversation ID column to continue."; return; }
+    go.disabled=true; bar.hidden=false; runImport(rows,m,bar.firstChild,status,function(){ go.textContent="Done"; });
+  }});
+  stage.appendChild(el("div",{style:"display:flex;flex-direction:column;gap:8px;margin-top:6px"},[go,bar,status]));
+}
+function toTicket(r,m){
+  function g(k){ return m[k]?r[m[k]]:""; }
+  var t={}, d=m.createdAt?parseDate(g("createdAt")):null, conv=clean(g("convId"));
+  if(!d && !conv) return null;
+  if(d) t.createdAt=d.toISOString(); else t._updateOnly=true;
+  if(m.convId) t.convId=conv;
+  if(m.chatUrl){ var url=clean(g("chatUrl")); t.chatUrl=/^https?:\/\//i.test(url)?url:""; }
+  if(m.l1) t.l1=canon(g("l1"));
+  if(m.l2) t.l2=canon(g("l2"));
+  if(m.orderId) t.orderId=clean(g("orderId"));
+  if(m.channel) t.channel=clean(g("channel"));
+  if(m.message) t.message=String(clean(g("message"))).slice(0,4000);
+  if(m.activeOrder) t.activeOrder=parseActive(g("activeOrder"));
+  t._id=conv?("c_"+safeId(conv)):("h_"+hash((t.createdAt||"")+"|"+(t.orderId||"")+"|"+(t.message||"")));
+  return t;
+}
+/* ---- Freshchat chat-transcript export: one row per message → one ticket per conversation ---- */
+function isTranscript(fields){ var f={}; fields.forEach(function(h){ f[String(h).trim()]=1; }); return f.conversation_id && f.message_parts && f.created_time && f.actor_type; }
+function partsText(s){
+  var p; try{ p=JSON.parse(s); }catch(_){ return String(s||""); }
+  if(!Array.isArray(p)) return "";
+  return p.map(function(x){ if(x.text) return String(x.text.content||""); if(x.image) return "[image]"; if(x.file) return "[file]"; return ""; }).filter(Boolean).join(" ");
+}
+var ORDER_RE=/HR\/\d{2}\/\d{4,7}/g;
+function aggregateTranscript(rows){
+  rows=rows.slice().sort(function(a,b){ return String(a.created_time).localeCompare(String(b.created_time)); });
+  var map={}, order=[];
+  rows.forEach(function(r){
+    var id=clean(r.conversation_id); if(!id) return;
+    var c=map[id]; if(!c){ c=map[id]={id:id,url:"",first:null,chan:"",src:"",user:[],uo:[],ao:[]}; order.push(id); }
+    var d=parseDate(r.created_time); if(d && (!c.first||d<c.first)) c.first=d;
+    if(!c.url && /^https?:\/\//.test(r.conversation_url||"")) c.url=r.conversation_url;
+    if(!c.chan && r.channel_name) c.chan=r.channel_name;
+    var text=partsText(r.message_parts), found=text.match(ORDER_RE)||[];
+    var isUser=r.actor_type==="user" && r.message_type==="normal";
+    if(isUser){ if(text.trim()) c.user.push(text.trim()); if(!c.src) c.src=r.message_source||""; }
+    found.forEach(function(o){ var list=isUser?c.uo:c.ao; if(list.indexOf(o)<0) list.push(o); });
+  });
+  return order.map(function(id){
+    var c=map[id]; if(!c.first) return null;
+    var orders=c.uo.length?c.uo:c.ao;
+    var ch=/^whatsapp/i.test(c.chan)?"WhatsApp":c.src==="mobile"?"App chat":c.src==="web"?"Web chat":(c.chan||c.src||"");
+    return {_id:"c_"+safeId(id),_noCustomer:!c.user.length,createdAt:c.first.toISOString(),convId:id,chatUrl:c.url,channel:ch,
+      orderId:orders.slice(0,3).join(", "),message:c.user.slice(0,3).join(" / ").slice(0,1500),source:"freshchat-transcript"};
+  }).filter(Boolean);
+}
+function showTranscript(stage,rows){
+  stage.textContent="";
+  var items=aggregateTranscript(rows), withMsg=items.filter(function(t){return !t._noCustomer;}).length;
+  var withOrder=items.filter(function(t){return t.orderId;}).length;
+  stage.appendChild(el("h3",{text:"Freshchat chat transcript detected"}));
+  stage.appendChild(el("p",{text:rows.length+" messages grouped into "+items.length+" conversations. "+withMsg+" have a customer message and "+withOrder+" mention an order ID (HR/…). The first customer messages become “Customer said”, and the conversation link becomes “Open chat”."}));
+  stage.appendChild(el("p",{text:"This export has no L1/L2 columns, so new chats arrive as Not tagged and existing tags are kept. Import Freshchat’s category report afterwards, or tag chats by clicking the L1/L2 pill on a row."}));
+  var bar=el("div",{class:"bar",hidden:true},[el("i")]), status=el("p",{class:"muted"});
+  var go=el("button",{class:"btn primary",type:"button",text:"Import "+items.length+" conversations",onclick:function(){ go.disabled=true; bar.hidden=false; runItems(items,0,bar.firstChild,status,function(){ go.textContent="Done"; }); }});
+  stage.appendChild(el("div",{style:"display:flex;flex-direction:column;gap:8px;margin-top:6px"},[go,bar,status]));
+}
+function runImport(rows,m,barFill,status,done){
+  var seen={}, bad=0;
+  rows.forEach(function(r){ var t=toTicket(r,m); if(!t){bad++; return;} var p=seen[t._id]; if(p && p.createdAt && t.createdAt && p.createdAt<t.createdAt) t.createdAt=p.createdAt; seen[t._id]=t; });
+  runItems(Object.keys(seen).map(function(k){return seen[k];}),bad,barFill,status,done);
+}
+function runItems(items,bad,barFill,status,done){
+  var i=0, added=0, updated=0, skipped=0, failed=0, total=items.length, active=0, LIMIT=6;
+  function next(){
+    while(active<LIMIT && i<total){ (function(t){ active++; write(t,0).then(function(r){ if(r==="added") added++; else if(r==="skipped") skipped++; else updated++; },function(){ failed++; }).then(function(){ active--; tick(); next(); }); })(items[i++]); }
+    if(active===0 && i>=total){ status.textContent="Imported "+added+" new chats, updated "+updated+"."+(skipped?" Skipped "+skipped+" that aren’t in the tracker yet or have no customer message.":"")+(bad?" Skipped "+bad+" rows with no date or conversation ID.":"")+(failed?" "+failed+" couldn’t be saved; import the file again to retry them.":""); done(); }
+  }
+  function tick(){ var n=added+updated+skipped+failed; barFill.style.width=(total?Math.round(n/total*100):100)+"%"; status.textContent="Saving "+n+" of "+total+"…"; }
+  function write(t,attempt){
+    var body=Object.assign({},t); delete body._id; delete body._updateOnly; delete body._noCustomer;
+    var ref=S.db.collection("tickets").doc(t._id);
+    return ref.get().then(function(snap){
+      if(snap.exists){ var cur=snap.data()||{}; if(cur.tagManual){ delete body.l1; delete body.l2; } return ref.update(body).then(function(){return "updated";}); }
+      if(t._updateOnly||t._noCustomer) return "skipped";
+      body=Object.assign({l1:"",l2:"",orderId:"",channel:"",message:"",activeOrder:"",convId:"",chatUrl:""},body);
+      body.importedAt=new Date().toISOString(); return ref.set(body).then(function(){return "added";});
+    }).catch(function(e){
+      var c=e&&e.code; if((c==="resource-exhausted"||c==="unavailable") && attempt<4){ return new Promise(function(res){setTimeout(res,800*(attempt+1)+Math.random()*400);}).then(function(){return write(t,attempt+1);}); }
+      throw e;
+    });
+  }
+  if(!total){ status.textContent="Nothing to import. Check the column matching."; done(); return; }
+  next();
+}
+$("btnImport").addEventListener("click",openImport);
+
+/* ---------- toolbar ---------- */
+$("rangeSeg").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return; S.range=b.getAttribute("data-r");
+  Array.prototype.forEach.call(this.querySelectorAll("button"),function(x){x.setAttribute("aria-pressed",x===b?"true":"false");}); subscribeTickets(); render(); });
+var st=null; $("search").addEventListener("input",function(e){ clearTimeout(st); var v=e.target.value; st=setTimeout(function(){S.search=v; render();},150); });
+
+/* running TAT clock (display only, no writes) */
+setInterval(function(){ if(S.tickets.some(function(t){return t.assignedAt&&!t.rcaAt;})) render(); },60000);
+
+/* ---------- data ---------- */
+function subscribeTickets(){
+  if(!S.db) return; if(S.unsub) S.unsub(); S.loaded=false;
+  var q=S.db.collection("tickets"), from=rangeStart();
+  if(from) q=q.where("createdAt",">=",from.toISOString());
+  q=q.orderBy("createdAt","desc").limit(3000);
+  S.unsub=q.onSnapshot(function(snap){
+    S.tickets=snap.docs.map(function(d){ var o=Object.assign({},d.data()); o.id=d.id; return o; });
+    S.hitLimit=snap.size>=3000; S.loaded=true; render();
+  },function(e){ S.loaded=true; toast(e&&e.code==="permission-denied"?"Your account doesn’t have access to the tickets.":"Tickets stopped updating. Reload the page."); render(); });
+}
+function showGate(msg){ $("app").hidden=true; $("gate").hidden=false; if(msg) $("gateMsg").textContent=msg; }
+var KEY_STORE="hr_cs_tracker_key";
+function readKey(){
+  var m=location.hash.match(/key=([A-Za-z0-9_-]{16,128})/);
+  if(m){ try{ localStorage.setItem(KEY_STORE,m[1]); }catch(_){} history.replaceState(null,"",location.pathname+location.search); return m[1]; }
+  try{ return localStorage.getItem(KEY_STORE)||""; }catch(_){ return ""; }
+}
+function start(){
+  if(typeof firebase==="undefined"||!CFG.firebase||!CFG.firebase.apiKey||/YOUR_/.test(CFG.firebase.apiKey)){ showGate("This tracker isn’t set up yet. Add your Firebase project details to config.js (see README)."); $("keyInput").hidden=true; $("btnKey").hidden=true; return; }
+  firebase.initializeApp(CFG.firebase);
+  var fs=firebase.firestore();
+  function open(key){
+    var root=fs.collection("workspaces").doc(key);
+    S.key=key; TRACKER_URL=BASE_URL+"#key="+key;
+    S.db={collection:function(n){ return root.collection(n); },doc:function(p){ var a=p.split("/"); return root.collection(a[0]).doc(a[1]); }};
+    root.collection("config").doc("settings").get().then(function(){
+      $("gate").hidden=true; $("app").hidden=false; S.ready=true;
+      S.db.collection("owners").orderBy("name").onSnapshot(function(snap){ S.owners=snap.docs.map(function(d){var o=Object.assign({},d.data()); o.id=d.id; return o;}); if(S._fillOwners && $("dlgSettings").open) S._fillOwners(); render(); },function(){});
+      S.db.doc("config/settings").onSnapshot(function(snap){ var v=snap.exists?snap.data():{}; S.settings={linkTemplate:v.linkTemplate||"",slaHours:Number(v.slaHours)||48}; render(); },function(){});
+      subscribeTickets(); render();
+    },function(e){
+      try{ localStorage.removeItem(KEY_STORE); }catch(_){}
+      showGate(e&&e.code==="permission-denied"?"That access key didn’t work. Check it and try again.":"Couldn’t reach the database. Check your connection and reload.");
+    });
+  }
+  $("btnKey").addEventListener("click",function(){ var k=$("keyInput").value.trim(); if(!/^[A-Za-z0-9_-]{16,128}$/.test(k)){ $("gateMsg").textContent="The access key is 16 or more letters and numbers."; return; } try{ localStorage.setItem(KEY_STORE,k); }catch(_){} open(k); });
+  $("keyInput").addEventListener("keydown",function(e){ if(e.key==="Enter") $("btnKey").click(); });
+  var k=readKey(); if(k) open(k); else showGate();
+}
+start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+rules_version = '2';
+// Only someone who knows the access key can read or write the tracker.
+// Replace the key below with your own (see README), and never commit the real key to GitHub.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspaces/{key}/{document=**} {
+      allow read, write: if key == 'REPLACE_WITH_YOUR_ACCESS_KEY';
+    }
+  }
+}
