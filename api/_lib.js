@@ -117,6 +117,7 @@ function enc(v) {
   if (v === null || v === undefined) return { nullValue: null };
   if (typeof v === "boolean") return { booleanValue: v };
   if (typeof v === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(enc) } };
   return { stringValue: String(v) };
 }
 function dec(f) {
@@ -127,6 +128,7 @@ function dec(f) {
     else if ("integerValue" in v) out[k] = Number(v.integerValue);
     else if ("doubleValue" in v) out[k] = v.doubleValue;
     else if ("nullValue" in v) out[k] = null;
+    else if ("arrayValue" in v) out[k] = ((v.arrayValue && v.arrayValue.values) || []).map((x) => dec({ x }).x);
   }
   return out;
 }
@@ -166,6 +168,35 @@ export async function fsPatch(id, data, exists) {
   const txt = await r.text();
   if (/FAILED_PRECONDITION|NOT_FOUND|ALREADY_EXISTS/.test(txt)) return false;
   throw new Error(`Firestore write ${r.status}: ${txt.slice(0, 200)}`);
+}
+
+export async function fsListAll(collectionId, limit = 1000) {
+  const r = await http(`${fsRoot()}:runQuery?key=${CFG.fbKey}`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ structuredQuery: { from: [{ collectionId }], limit } }),
+  });
+  if (!r.ok) throw new Error(`Firestore query ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return (await r.json()).filter((x) => x.document).map((x) => ({ id: x.document.name.split("/").pop(), ...dec(x.document.fields) }));
+}
+
+/* Auto-assignment: same matching as the tracker page (L1+L2, then L2 alone; names match full or first name). */
+const rk = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+export async function loadRouter() {
+  const [routes, owners] = await Promise.all([fsListAll("routing"), fsListAll("owners")]);
+  const find = (n) => owners.find((o) => rk(o.name) === rk(n)) || owners.find((o) => rk(String(o.name).split(/\s+/)[0]) === rk(n));
+  return function route(l1, l2) {
+    if (!l2) return null;
+    const r = routes.find((x) => rk(x.l1) + "|" + rk(x.l2) === rk(l1) + "|" + rk(l2)) || routes.find((x) => rk(x.l2) === rk(l2));
+    if (!r) return null;
+    const list = [];
+    for (const n of r.owners || []) { const o = find(n); if (o && !list.includes(o)) list.push(o); }
+    if (!list.length) return null;
+    return {
+      ownerId: list[0].id, ownerIds: list.map((o) => o.id), ownerName: list.map((o) => o.name).join(", "),
+      ownerEmail: list.filter((o) => o.email).map((o) => o.email).join(","), assignedAt: new Date().toISOString(),
+      assignedBy: "auto", autoAssigned: true, autoAssignOff: false,
+    };
+  };
 }
 
 export async function fsUntagged(limit = 500) {
@@ -251,7 +282,7 @@ export async function upsertConversation(convId, userMsg) {
   throw new Error("Couldn't save the ticket after 3 attempts");
 }
 
-export async function refreshTags(ticket) {
+export async function refreshTags(ticket, router) {
   const conv = await fcGet("/conversations/" + encodeURIComponent(ticket.convId));
   if (!conv) return false;
   const props = conv.properties || {};
@@ -261,5 +292,6 @@ export async function refreshTags(ticket) {
   if (l1) patch.l1 = l1;
   if (l2) patch.l2 = l2;
   if (!ticket.orderId && clean(props.cf_order_number)) patch.orderId = clean(props.cf_order_number);
+  if (router && !ticket.ownerId && !ticket.autoAssignOff) { const a = router(l1 || ticket.l1, l2 || ticket.l2); if (a) Object.assign(patch, a); }
   return fsPatch(ticket.id, patch, true);
 }
