@@ -18,7 +18,26 @@ const PENDING_TIMEOUT_MS = 3 * 3600e3;  // give up on a report that never finish
 const TAG_BATCH = 60;
 const started = () => Date.now();
 
+// Any unexpected error is returned as readable JSON, so it shows up in the GitHub Actions log.
 export async function GET(request) {
+  try {
+    return await run(request);
+  } catch (e) {
+    console.error("poll failed:", e && e.stack || e);
+    return json({ ok: false, error: String((e && e.message) || e), hint: hintFor(String((e && e.message) || e)) }, 500);
+  }
+}
+
+function hintFor(msg) {
+  if (/Firestore (read|write|query) 403|PERMISSION_DENIED/i.test(msg)) return "Firestore refused access: TRACKER_KEY in Vercel must match the key in your Firestore rules exactly.";
+  if (/Firestore .* 400.*API key|API_KEY_INVALID|API key not valid/i.test(msg)) return "FIREBASE_API_KEY in Vercel is wrong; copy apiKey from config.js.";
+  if (/Firestore .* 404/i.test(msg)) return "Check FIREBASE_PROJECT_ID in Vercel (should be homerun-cs-tracker) and that the Firestore database exists.";
+  if (/Freshchat 401|Freshchat 403/i.test(msg)) return "Freshchat refused FRESHCHAT_API_KEY; generate a new token and update it in Vercel.";
+  if (/fetch failed|ENOTFOUND|getaddrinfo/i.test(msg)) return "A web address couldn't be reached; check FRESHCHAT_BASE in Vercel.";
+  return "";
+}
+
+async function run(request) {
   const t0 = started();
   const secret = String(process.env.CRON_SECRET || "").trim();
   if (!secret || request.headers.get("authorization") !== "Bearer " + secret) return json({ ok: false, error: "unauthorized" }, 401);
