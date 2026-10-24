@@ -158,20 +158,35 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
 .who{color:var(--muted);font-size:12.5px;align-self:center}
 .badge{display:inline-block;font-size:10.5px;font-weight:600;border-radius:4px;padding:0 5px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px}
 .tatsel{border:1px solid var(--line-strong);border-radius:6px;padding:4px 6px;background:var(--surface);font-size:13px}
-.catsum{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
-.catsum>button.head{width:100%;display:flex;justify-content:space-between;align-items:center;border:none;background:none;padding:11px 14px;cursor:pointer;font-weight:600}
-.catsum>button.head .muted{font-weight:400;font-size:12.5px}
-.catsum .inner{overflow:auto;max-height:420px;border-top:1px solid var(--line)}
-.catsum table{min-width:640px}
-.catsum th,.catsum td{padding:7px 12px;font-size:13px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
-.catsum th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-weight:600;z-index:1}
-.catsum th:first-child,.catsum td:first-child{text-align:left;white-space:normal}
-.catsum tr.l1 td{font-weight:600}
-.catsum tr.l2 td:first-child{padding-left:34px;font-weight:400}
-.catsum td button.lnk{border:none;background:none;padding:0;color:var(--ink);cursor:pointer;text-align:left;font:inherit}
-.catsum td button.lnk:hover{color:var(--accent);text-decoration:underline}
-.catsum td button.tog{border:none;background:none;cursor:pointer;color:var(--muted);width:18px;padding:0;margin-right:4px}
-.catsum .bar2{display:inline-block;height:6px;border-radius:3px;background:var(--accent);opacity:.55;vertical-align:middle;margin-right:8px}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:40;width:min(560px,100vw);background:var(--surface);border-left:1px solid var(--line-strong);box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);animation:slidein .18s ease-out}
+@keyframes slidein{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.drawer .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.drawer .dh h2{margin:0;font-size:17px;font-weight:600}
+.drawer .dh p{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+.drawer .x{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex:none}
+.drawer .tools{display:flex;gap:8px;align-items:center;padding:10px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.drawer .tools input{flex:1 1 180px;border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--surface);font-size:13px;min-width:0}
+.drawer .legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);padding:8px 20px 0}
+.drawer .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.drawer .list{overflow:auto;flex:1;padding:6px 12px 20px}
+.cs-row{display:grid;grid-template-columns:18px 1fr auto;gap:6px 8px;align-items:center;padding:9px 8px;border-radius:8px}
+.cs-row:hover{background:var(--surface-2)}
+.cs-row.on{background:var(--accent-soft)}
+.cs-row .tog{border:none;background:none;cursor:pointer;color:var(--muted);padding:0;width:18px;font-size:12px}
+.cs-row .nm{border:none;background:none;padding:0;text-align:left;cursor:pointer;font:inherit;color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+.cs-row.sub .nm{font-weight:400}
+.cs-row .nm:hover{color:var(--accent)}
+.cs-row .cnt{font-weight:600;font-size:15px;text-align:right;min-width:36px}
+.cs-row .meta{grid-column:2 / 4;display:flex;flex-direction:column;gap:4px}
+.cs-row .stack{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--line)}
+.cs-row .stack span{display:block;height:100%}
+.cs-row .nums{display:flex;gap:12px;font-size:11.5px;color:var(--muted)}
+.cs-row .nums b{font-weight:600;color:var(--ink)}
+.cs-sub{margin:0 0 4px 22px;border-left:2px solid var(--line);padding-left:6px}
+.c-un{background:var(--faint)} .c-pend{background:var(--warn)} .c-done{background:var(--ok)}
+.seg2{display:inline-flex;border:1px solid var(--line-strong);border-radius:7px;overflow:hidden}
+.seg2 button{border:none;background:var(--surface);padding:5px 9px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.seg2 button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 dialog.wide{width:min(1040px,calc(100vw - 24px))}
 .rules{border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:52vh}
 .rules table{min-width:760px}
@@ -193,6 +208,7 @@ dialog.wide{width:min(1040px,calc(100vw - 24px))}
       <p class="sub" id="subline">Freshchat conversations, product owner assignment and RCA</p>
     </div>
     <div class="actions">
+      <button class="btn" id="btnCats" type="button" aria-controls="catDrawer" aria-expanded="false">Category summary</button>
       <button class="btn" id="btnRules" type="button">Assignment rules</button>
       <button class="btn" id="btnSettings" type="button">Product owners &amp; settings</button>
       <button class="btn primary" id="btnImport" type="button">Import Freshchat export</button>
@@ -214,8 +230,6 @@ dialog.wide{width:min(1040px,calc(100vw - 24px))}
 
   <div class="tally" id="tally"></div>
 
-  <section class="catsum" id="catSummary"></section>
-
   <div class="tablebox">
     <table>
       <thead><tr id="headRow"></tr></thead>
@@ -228,6 +242,7 @@ dialog.wide{width:min(1040px,calc(100vw - 24px))}
 
 <dialog id="dlgImport"><div class="dlg" id="importBody"></div></dialog>
 <dialog id="dlgSettings"><div class="dlg" id="settingsBody"></div></dialog>
+<aside class="drawer" id="catDrawer" aria-label="Tickets by category" hidden></aside>
 <dialog id="dlgRules" class="wide"><div class="dlg" id="rulesBody"></div></dialog>
 
 <script>
@@ -504,32 +519,67 @@ function tatCell(t){
   var run=Date.now()-start; return el("span",{class:"tat "+(run>sla?"bad":"warn"),"data-running":t.assignedAt},[fmtDur(run),el("small",{text:(run>sla?"Open, over ":"Open, ")+hrs+"h target"})]);
 }
 
-/* ---------- ticket counts by L1 / L2 (live) ---------- */
-function renderCatSummary(){
-  var box=$("catSummary"); box.textContent="";
-  var rows=baseRows(["l1","l2"]);
-  var open=true; try{ open=localStorage.getItem("hr_cat_open")!=="0"; }catch(_){}
-  var groups={}, order=[];
+/* ---------- ticket counts by L1 / L2 (live, right-side sheet) ---------- */
+S.cat={open:false,q:"",sort:"count"};
+try{ S.cat.open=localStorage.getItem("hr_cat_drawer")==="1"; }catch(_){}
+function setCatOpen(v){ S.cat.open=v; try{ localStorage.setItem("hr_cat_drawer",v?"1":"0"); }catch(_){} $("btnCats").setAttribute("aria-expanded",v?"true":"false"); renderCatSummary(); }
+function catGroups(){
+  var rows=baseRows(["l1","l2"]), groups={}, order=[];
   rows.forEach(function(t){ var a=t.l1||NONE, b=t.l2||NONE; var g=groups[a]; if(!g){ g=groups[a]={k:a,n:0,un:0,pend:0,done:0,subs:{}}; order.push(a); }
     var sg=g.subs[b]||(g.subs[b]={k:b,n:0,un:0,pend:0,done:0});
-    [g,sg].forEach(function(x){ x.n++; var st=rcaState(t); if(!t.ownerId) x.un++; if(st==="pending") x.pend++; if(st==="attached") x.done++; }); });
-  order.sort(function(a,b){ if((a===NONE)!==(b===NONE)) return a===NONE?1:-1; return groups[b].n-groups[a].n; });
-  var head=el("button",{class:"head",type:"button","aria-expanded":open?"true":"false",onclick:function(){ try{ localStorage.setItem("hr_cat_open",open?"0":"1"); }catch(_){} renderCatSummary(); }},
-    [el("span",null,["Tickets by category ",el("span",{class:"muted",text:"("+rows.length+" in range, "+order.length+" categories)"})]),el("span",{class:"muted",text:open?"Hide ▲":"Show ▼"})]);
-  box.appendChild(head); if(!open) return;
-  var max=order.reduce(function(m,k){ return Math.max(m,groups[k].n); },1);
-  var tb=el("tbody");
-  function nameBtn(label,l1,l2){ return el("button",{class:"lnk",type:"button",title:"Show these chats in the table",onclick:function(){ S.filters.l1=l1; S.filters.l2=l2; S.quick=null; render(); }},[label]); }
-  order.forEach(function(k){ var g=groups[k], isOpen=!!S.catOpen[k];
-    tb.appendChild(el("tr",{class:"l1"},[el("td",null,[el("button",{class:"tog",type:"button","aria-label":isOpen?"Collapse":"Expand",onclick:function(){ S.catOpen[k]=!isOpen; renderCatSummary(); }},[isOpen?"▾":"▸"]),
-      el("span",{class:"bar2",style:"width:"+Math.max(4,Math.round(g.n/max*80))+"px"}),nameBtn(k===NONE?"Not tagged":k,k,null)]),
-      el("td",{text:String(g.n)}),el("td",{text:String(g.un)}),el("td",{text:String(g.pend)}),el("td",{text:String(g.done)})]));
-    if(isOpen) Object.keys(g.subs).map(function(x){return g.subs[x];}).sort(function(a,b){ return b.n-a.n; }).forEach(function(sg){
-      tb.appendChild(el("tr",{class:"l2"},[el("td",null,[nameBtn(sg.k===NONE?"Not tagged":sg.k,k,sg.k)]),el("td",{text:String(sg.n)}),el("td",{text:String(sg.un)}),el("td",{text:String(sg.pend)}),el("td",{text:String(sg.done)})]));
-    });
-  });
-  box.appendChild(el("div",{class:"inner"},[el("table",null,[el("thead",null,[el("tr",null,["L1 / L2","Tickets","Unassigned","Awaiting RCA","RCA attached"].map(function(h){return el("th",{scope:"col",text:h});}))]),tb])]));
+    [g,sg].forEach(function(x){ x.n++; var st=rcaState(t); if(st==="attached") x.done++; else if(!t.ownerId) x.un++; else x.pend++; }); });
+  return {rows:rows,groups:groups,order:order};
 }
+function renderCatSummary(){
+  var d=$("catDrawer"), btn=$("btnCats");
+  var data=catGroups();
+  btn.textContent="Category summary ("+data.order.filter(function(k){return k!==NONE;}).length+")";
+  if(!S.cat.open){ d.hidden=true; return; }
+  var keepFocus=document.activeElement&&document.activeElement.id==="catSearch", caret=keepFocus?document.activeElement.selectionStart:0;
+  d.hidden=false; d.textContent="";
+  var q=S.cat.q.trim().toLowerCase();
+  function sorter(a,b){ if((a.k===NONE)!==(b.k===NONE)) return a.k===NONE?1:-1;
+    if(S.cat.sort==="name") return a.k.localeCompare(b.k);
+    if(S.cat.sort==="open") return (b.un+b.pend)-(a.un+a.pend)||b.n-a.n;
+    return b.n-a.n; }
+  var tagged=data.rows.filter(function(t){return t.l1;}).length;
+  d.appendChild(el("div",{class:"dh"},[el("div",null,[el("h2",{text:"Tickets by category"}),
+    el("p",{text:data.rows.length+" chats in this range · "+tagged+" tagged · "+(data.rows.length-tagged)+" not tagged. Updates live."})]),
+    el("button",{class:"x",type:"button","aria-label":"Close",title:"Close (Esc)",onclick:function(){ setCatOpen(false); }},["×"])]));
+  var search=el("input",{id:"catSearch",type:"search",placeholder:"Find a category or sub-category",value:S.cat.q,oninput:function(e){ S.cat.q=e.target.value; renderCatSummary(); }});
+  var seg=el("div",{class:"seg2",role:"group","aria-label":"Sort"},[["count","Most tickets"],["open","Most open"],["name","A–Z"]].map(function(o){
+    return el("button",{type:"button","aria-pressed":S.cat.sort===o[0]?"true":"false",onclick:function(){ S.cat.sort=o[0]; renderCatSummary(); }},[o[1]]); }));
+  d.appendChild(el("div",{class:"tools"},[search,seg]));
+  d.appendChild(el("div",{class:"legend"},[el("span",null,[el("i",{class:"c-done"}),"RCA attached"]),el("span",null,[el("i",{class:"c-pend"}),"Awaiting RCA"]),el("span",null,[el("i",{class:"c-un"}),"Unassigned"])]));
+  var list=el("div",{class:"list"});
+  function row(x,l1,l2,isSub,expandable,isOpen){
+    var on=S.filters.l1===l1 && (isSub?S.filters.l2===l2:S.filters.l2==null);
+    var stack=el("div",{class:"stack",title:x.done+" RCA attached, "+x.pend+" awaiting RCA, "+x.un+" unassigned"},[
+      x.done?el("span",{class:"c-done",style:"width:"+(x.done/x.n*100)+"%"}):null,
+      x.pend?el("span",{class:"c-pend",style:"width:"+(x.pend/x.n*100)+"%"}):null,
+      x.un?el("span",{class:"c-un",style:"width:"+(x.un/x.n*100)+"%"}):null]);
+    return el("div",{class:"cs-row"+(isSub?" sub":"")+(on?" on":"")},[
+      expandable?el("button",{class:"tog",type:"button","aria-expanded":isOpen?"true":"false","aria-label":(isOpen?"Collapse ":"Expand ")+x.k,onclick:function(){ S.catOpen[l1]=!isOpen; renderCatSummary(); }},[isOpen?"▾":"▸"]):el("span"),
+      el("button",{class:"nm",type:"button",title:on?"Clear this filter":"Show these chats in the table",onclick:function(){ if(on){ S.filters.l1=null; S.filters.l2=null; } else { S.filters.l1=l1; S.filters.l2=isSub?l2:null; } S.quick=null; render(); }},[x.k===NONE?"Not tagged":x.k]),
+      el("span",{class:"cnt",text:String(x.n)}),
+      el("div",{class:"meta"},[stack,el("div",{class:"nums"},[el("span",null,[el("b",{text:String(x.un)})," unassigned"]),el("span",null,[el("b",{text:String(x.pend)})," awaiting"]),el("span",null,[el("b",{text:String(x.done)})," done"])])])]);
+  }
+  var shown=0;
+  data.order.map(function(k){return data.groups[k];}).sort(sorter).forEach(function(g){
+    var subs=Object.keys(g.subs).map(function(k){return g.subs[k];}).sort(sorter);
+    var nameHit=!q||(g.k===NONE?"not tagged":g.k.toLowerCase()).indexOf(q)>=0;
+    var subHits=q?subs.filter(function(sg){ return (sg.k===NONE?"not tagged":sg.k.toLowerCase()).indexOf(q)>=0; }):subs;
+    if(!nameHit && !subHits.length) return;
+    var isOpen=!!S.catOpen[g.k]||(q&&!nameHit), expandable=!(subs.length===1&&subs[0].k===NONE);
+    list.appendChild(row(g,g.k,null,false,expandable,isOpen)); shown++;
+    if(isOpen&&expandable){ var wrap=el("div",{class:"cs-sub"}); (nameHit?subs:subHits).forEach(function(sg){ wrap.appendChild(row(sg,g.k,sg.k,true,false,false)); }); list.appendChild(wrap); }
+  });
+  if(!shown) list.appendChild(el("p",{class:"muted",style:"padding:16px 8px",text:q?"No category matches “"+S.cat.q+"”.":"No chats in this range."}));
+  d.appendChild(list);
+  if(keepFocus){ search.focus(); try{ search.setSelectionRange(caret,caret); }catch(_){} }
+}
+$("btnCats").addEventListener("click",function(){ setCatOpen(!S.cat.open); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape" && S.cat.open && !pop && !document.querySelector("dialog[open]")) setCatOpen(false); });
 
 function render(){
   // drop an L2 filter that no longer matches the chosen L1
