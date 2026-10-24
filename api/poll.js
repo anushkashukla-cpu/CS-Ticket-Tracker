@@ -8,7 +8,7 @@
 import zlib from "node:zlib";
 import {
   CFG, json, missingEnv, http, fcGet, fsGet, fsPatch, fsGetPath, fsSetPath, fsUntagged, refreshTags,
-  docId, partsText, channelLabel, ORDER_RE, clean, iso,
+  docId, partsText, channelLabel, ORDER_RE, clean, iso, loadRouter,
 } from "./_lib.js";
 
 const STATE = "config/poller";
@@ -46,6 +46,8 @@ async function run(request) {
 
   const out = { ok: true };
   let state = (await fsGetPath(STATE)) || {};
+  let router = null;
+  try { router = await loadRouter(); } catch (e) { out.routing = "rules not loaded: " + e.message; }
 
   // 1) Collect the report requested last time
   if (state.pendingId) {
@@ -59,7 +61,7 @@ async function run(request) {
       } else if (links.length && !/progress|pending|queued|process/.test(status)) {
         const rows = [];
         for (const link of links) rows.push(...(await downloadCsvRows(link)));
-        const res = await importRows(rows, t0);
+        const res = await importRows(rows, t0, router);
         out.report = { window: [state.pendingStart, state.pendingEnd], messages: rows.length, ...res };
         state = { ...state, lastEnd: state.pendingEnd, pendingId: "", pendingStart: "", pendingEnd: "", lastImportAt: new Date().toISOString() };
       } else if (Date.now() - Date.parse(state.pendingRequestedAt || 0) > PENDING_TIMEOUT_MS) {
@@ -106,7 +108,7 @@ async function run(request) {
       .slice(0, TAG_BATCH);
     let tagged = 0, i = 0;
     const worker = async () => {
-      while (i < todo.length && Date.now() - t0 < 270e3) { const t = todo[i++]; try { if (await refreshTags(t)) tagged++; } catch (e) { console.error(t.id, e.message); } }
+      while (i < todo.length && Date.now() - t0 < 270e3) { const t = todo[i++]; try { if (await refreshTags(t, router)) tagged++; } catch (e) { console.error(t.id, e.message); } }
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     out.tags = { checked: Math.min(i, todo.length), newlyTagged: tagged };
@@ -196,13 +198,13 @@ export function groupByConversation(rows) {
   return [...map.values()];
 }
 
-async function importRows(rows, t0) {
+async function importRows(rows, t0, router) {
   const convs = groupByConversation(rows);
   let added = 0, updated = 0, skipped = 0, failed = 0, i = 0;
   const worker = async () => {
     while (i < convs.length && Date.now() - t0 < 200e3) {
       const c = convs[i++];
-      try { const r = await upsertFromReport(c); r === "added" ? added++ : r === "updated" ? updated++ : skipped++; }
+      try { const r = await upsertFromReport(c, router); r === "added" ? added++ : r === "updated" ? updated++ : skipped++; }
       catch (e) { failed++; console.error(c.convId, e.message); }
     }
   };
@@ -210,7 +212,7 @@ async function importRows(rows, t0) {
   return { conversations: convs.length, added, updated, skipped, failed, unfinished: convs.length - i };
 }
 
-async function upsertFromReport(c) {
+async function upsertFromReport(c, router) {
   const conv = await fcGet("/conversations/" + encodeURIComponent(c.convId)).catch(() => null);
   const props = (conv && conv.properties) || {};
   const l1 = clean(props[CFG.l1Field]), l2 = clean(props[CFG.l2Field]);
@@ -227,6 +229,10 @@ async function upsertFromReport(c) {
     Object.assign(patch, { convId: c.convId, chatUrl: (conv && conv.url) || c.url || (cur && cur.chatUrl) || "", syncedAt: now, source: "freshchat-api" });
     if (conv && conv.status) patch.status = conv.status;
     if (!(cur && cur.tagManual)) { if (l1) patch.l1 = l1; if (l2) patch.l2 = l2; }
+    if (router && !(cur && (cur.ownerId || cur.autoAssignOff))) {
+      const a = router(patch.l1 ?? (cur && cur.l1), patch.l2 ?? (cur && cur.l2));
+      if (a) Object.assign(patch, a);
+    }
     if (!(cur && cur.channel)) {
       const ch = /whatsapp/i.test(c.chan) ? "WhatsApp" : c.src === "mobile" ? "App chat" : c.src === "web" ? "Web chat"
         : (c.chan || (conv ? await channelLabel(conv.channel_id) : ""));
