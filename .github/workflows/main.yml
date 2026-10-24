@@ -1,0 +1,29 @@
+name: Freshchat sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: freshchat-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Pull new chats from Freshchat
+        env:
+          TRACKER_URL: ${{ secrets.TRACKER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$TRACKER_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::Add the TRACKER_URL and CRON_SECRET repository secrets (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          code=$(curl -sS -o response.json -w "%{http_code}" --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" "${TRACKER_URL%/}/api/poll")
+          cat response.json; echo
+          if [ "$code" != "200" ]; then echo "::error::Tracker sync returned HTTP $code"; exit 1; fi
