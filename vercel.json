@@ -1,10 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/sync.js": { "maxDuration": 300 },
-    "api/freshchat-webhook.js": { "maxDuration": 30 }
+    "api/sync.js": {
+      "maxDuration": 300
+    },
+    "api/freshchat-webhook.js": {
+      "maxDuration": 30
+    },
+    "api/poll.js": {
+      "maxDuration": 300
+    }
   },
   "crons": [
-    { "path": "/api/sync", "schedule": "30 0 * * *" }
+    {
+      "path": "/api/sync",
+      "schedule": "30 0 * * *"
+    }
   ]
 }

@@ -23,7 +23,7 @@ export const json = (body, status = 200) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function http(url, opts = {}, tries = 4) {
+export async function http(url, opts = {}, tries = 4) {
   let last;
   for (let a = 0; a < tries; a++) {
     try {
@@ -46,7 +46,7 @@ export async function fcGet(path) {
 }
 
 let channelCache = null;
-async function channelLabel(channelId, messageSource) {
+export async function channelLabel(channelId, messageSource) {
   if (messageSource === "mobile") return "App chat";
   if (messageSource === "web") return "Web chat";
   if (!channelId) return "";
@@ -131,6 +131,18 @@ function dec(f) {
   return out;
 }
 
+export async function fsGetPath(path) {
+  const r = await http(`${fsRoot()}/${path}?key=${CFG.fbKey}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`Firestore read ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return dec((await r.json()).fields);
+}
+export async function fsSetPath(path, data) {
+  const fields = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, enc(v)]));
+  const r = await http(`${fsRoot()}/${path}?key=${CFG.fbKey}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ fields }) });
+  if (!r.ok) throw new Error(`Firestore write ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
 export const docId = (convId) => "c_" + String(convId).replace(/[^A-Za-z0-9_\-~:@+]/g, "_").slice(0, 150);
 
 export async function fsGet(id) {
@@ -175,12 +187,12 @@ export async function fsUntagged(limit = 500) {
 }
 
 /* ---------------- Ticket upsert ---------------- */
-const ORDER_RE = /HR\/\d{2}\/\d{4,7}/;
-const clean = (v) => {
+export const ORDER_RE = /HR\/\d{2}\/\d{4,7}/;
+export const clean = (v) => {
   const s = v == null ? "" : String(v).replace(/\s+/g, " ").trim();
   return /^(none|null|\(blank\))$/i.test(s) ? "" : s;
 };
-const iso = (t) => {
+export const iso = (t) => {
   const d = t ? new Date(t) : null;
   return d && !isNaN(d) ? d.toISOString() : "";
 };
@@ -217,7 +229,8 @@ export async function upsertConversation(convId, userMsg) {
       const ch = await channelLabel(conv.channel_id, userMsg && userMsg.source);
       if (ch) patch.channel = ch;
     }
-    if (userMsg && userMsg.text && userMsg.id !== (cur && cur.lastUserMsgId)) {
+    const importedEarlier = cur && cur.message && cur.userMsgCount == null; // row came from a CSV import
+    if (userMsg && userMsg.text && !importedEarlier && userMsg.id !== (cur && cur.lastUserMsgId)) {
       const count = (cur && cur.userMsgCount) || 0;
       if (count < 3) {
         const prev = (cur && cur.message) || "";
@@ -243,8 +256,8 @@ export async function refreshTags(ticket) {
   if (!conv) return false;
   const props = conv.properties || {};
   const l1 = clean(props[CFG.l1Field]), l2 = clean(props[CFG.l2Field]);
-  if (!l1 && !l2) return false;
   const patch = { syncedAt: new Date().toISOString() };
+  if (!l1 && !l2) { await fsPatch(ticket.id, patch, true); return false; }
   if (l1) patch.l1 = l1;
   if (l2) patch.l2 = l2;
   if (!ticket.orderId && clean(props.cf_order_number)) patch.orderId = clean(props.cf_order_number);

@@ -120,3 +120,34 @@ Send a message from the HomeRun app's chat. A new row should appear in the track
 - **Hand-set tags.** Tags set by hand in the tracker are never overwritten.
 - **Older chats.** History from before the webhook was switched on comes from the CSV import you've already done.
 - **Free plan limits.** The free Vercel plan runs the cron once a day. Webhooks are real-time on any plan.
+
+---
+
+## Automatic sync without a webhook (GitHub Actions)
+
+Use this when Freshchat's single webhook slot is already taken by another system.
+
+`.github/workflows/freshchat-sync.yml` calls `api/poll.js` every 15 minutes. Each run does three things:
+1. Collects the Freshchat **Chat-Transcript** report it requested on the previous run, and adds or updates those chats in the tracker. This is the same data as the CSV you used to import by hand.
+2. Requests the next report, starting from where the last one ended. The first run looks back 3 hours. If runs were missed, it catches up one day at a time.
+3. Re-checks up to 60 recent untagged chats for L1/L2 that agents added later.
+
+Freshchat can take a few minutes, and at most about an hour, to prepare each report. New chats usually appear 15–30 minutes after they start.
+
+### Setup
+1. **Vercel environment variables:** `FRESHCHAT_API_KEY`, `FRESHCHAT_BASE`, `TRACKER_KEY`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` and `CRON_SECRET`. `FRESHCHAT_WEBHOOK_PUBLIC_KEY` isn't needed for this. Redeploy after adding them.
+2. **GitHub repository secrets** (repo → Settings → Secrets and variables → Actions → New repository secret):
+   - `TRACKER_URL`: your Vercel address, for example `https://homerun-cs-tracker.vercel.app`
+   - `CRON_SECRET`: exactly the same value as in Vercel
+3. **First run:** go to the repo's **Actions** tab, open **Freshchat sync**, click **Run workflow**, and check the log. The first run only requests a report. Run it again after a few minutes, or wait for the next scheduled run, and it imports the chats.
+
+### Reading the log
+- `"requested"`: a new report was asked for.
+- `"report": "still being generated…"`: Freshchat isn't done yet. The next run picks it up.
+- `"report": { "added": …, "updated": … }`: chats were imported.
+- An HTTP 429 error means Freshchat accepts only one report request per minute. The next run retries on its own.
+
+### Good to know
+- **Run timing.** GitHub can start scheduled runs a few minutes late.
+- **Inactive repos.** On public repos, GitHub pauses scheduled workflows after 60 days with no commits. If that happens, re-enable it in the Actions tab.
+- **CSV-imported chats.** Rows that came from a CSV import are updated in place, and their message text isn't duplicated.
