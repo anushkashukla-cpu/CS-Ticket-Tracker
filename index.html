@@ -685,7 +685,7 @@ function mailStatus(t,own){
 }
 function fallbackActions(t,own){
   var acts=[];
-  if(own.email) acts.push(el("a",{href:mailto(t,own),target:"_blank",rel:"noopener",text:"Open in mail app"}));
+  if(own.email) acts.push(el("a",{href:mailMode()==="app"?mailto(t,own):gmailUrl(t,own),target:"_blank",rel:"noopener",text:mailMode()==="app"?"Open in mail app":"Open in Gmail"}));
   acts.push(el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(t,own).body,e.currentTarget); }}));
   return acts;
 }
@@ -703,6 +703,20 @@ function gmailToken(){
   });
 }
 function openMail(href){ var a=el("a",{href:href,style:"display:none"}); document.body.appendChild(a); a.click(); a.remove(); }
+/* Emails open as a ready-written Gmail draft in a new tab by default (no mail-app setup needed). */
+function mailMode(){ try{ return localStorage.getItem("hr_mail_mode")||"gmail"; }catch(_){ return "gmail"; } }
+function gmailUrl(t,own){ var p=emailParts(t,own);
+  return "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to="+encodeURIComponent(String(own.email).split(",").join(","))+"&su="+encodeURIComponent(p.subject)+"&body="+encodeURIComponent(p.body); }
+/* Must run inside the click so the new tab isn't blocked. Returns false if the browser blocked it. */
+function openCompose(t,own){
+  if(mailMode()==="app"){ openMail(mailto(t,own)); return true; }
+  var w=window.open(gmailUrl(t,own),"_blank"); if(w){ try{ w.opener=null; }catch(_){} return true; } return false;
+}
+function composeToast(prefix,t,own,ok){
+  var where=mailMode()==="app"?"Your mail app opened":"Gmail opened in a new tab";
+  toast(ok?prefix+where+" with the email to "+own.name+". Press Send there.":prefix+"Your browser blocked the Gmail tab. Allow pop-ups for this site, or use:",
+    (ok?[]:[el("a",{href:gmailUrl(t,own),target:"_blank",rel:"noopener",text:"Open in Gmail"})]).concat([el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(t,own).body,e.currentTarget); }})]),12000);
+}
 function b64utf8(str){ var bytes=new TextEncoder().encode(str), bin=""; for(var i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192)); return btoa(bin); }
 function b64url(str){ return str.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
 function gmailSend(token,to,subject,body){
@@ -715,8 +729,7 @@ function sendEmail(t,own,tokenPromise){
   if(!own.email){ toast("Add an email address for "+own.name+" under Product owners & settings."); return Promise.resolve(); }
   var p=emailParts(t,own), ref=S.db.collection("tickets").doc(t.id);
   if(!gmailAuto()){
-    openMail(mailto(t,own));
-    toast("Your mail app opened with the email to "+own.name+". Press send there.",[el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(p.body,e.currentTarget); }})],10000);
+    var ok=openCompose(t,own); composeToast("",t,own,ok);
     return ref.update({emailDraftedAt:new Date().toISOString(),emailTo:own.email,emailError:null}).catch(function(){});
   }
   S.sending[t.id]=true; render();
@@ -742,13 +755,14 @@ function confirmAssign(t,btn){
   var tokenP=null, drafted=null;
   if(o.email && gmailAuto()){ tokenP=gmailToken(); tokenP.catch(function(){}); }
   var patch0=assignPatch([o],false);
-  if(o.email && !gmailAuto()){ openMail(mailto(Object.assign({},t,patch0),o)); drafted=new Date().toISOString(); }
+  var opened=true;
+  if(o.email && !gmailAuto()){ opened=openCompose(Object.assign({},t,patch0),combine([o])); drafted=new Date().toISOString(); }
   btn.disabled=true; btn.textContent="Saving…";
   var patch=Object.assign(patch0,{emailDraftedAt:drafted,emailTo:drafted?o.email:null});
   if(t.ownerId && t.ownerId!==o.id){ patch.previousOwnerId=t.ownerId; }
   S.db.collection("tickets").doc(t.id).update(patch).then(function(){
     delete S.changing[t.id]; delete S.choice[t.id];
-    if(drafted){ toast("Assigned to "+o.name+". Your mail app opened with the email; press send there.",[el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(Object.assign({},t,patch),o).body,e.currentTarget); }})],10000); return; }
+    if(drafted){ composeToast("Assigned to "+o.name+". ",Object.assign({},t,patch),combine([o]),opened); return; }
     if(!o.email){ toast("Assigned to "+o.name+". Add their email in settings to notify them."); return; }
     return sendEmail(Object.assign({},t,patch),combine([o]),tokenP||undefined);
   }).catch(function(e){ btn.disabled=false; btn.textContent="Confirm"; toast(errText(e,"Couldn’t save the assignment.")); });
@@ -825,7 +839,9 @@ function openSettings(){
   b.appendChild(el("h3",{text:"Freshchat chat link"}));
   b.appendChild(el("p",{text:"Used when the export has a conversation ID but no link. Open any chat in Freshchat, copy its address, and replace the conversation ID with {id}."}));
   b.appendChild(el("div",{class:"field"},[tpl]));
-  b.appendChild(el("div",{class:"grid2"},[el("div",{class:"field"},[el("label",{text:"RCA TAT target (hours)"}),sla])]));
+  var mm=el("select",{onchange:function(e){ try{ localStorage.setItem("hr_mail_mode",e.target.value); }catch(_){} toast("Saved for this browser."); }},[
+    el("option",{value:"gmail",text:"Gmail in a new tab (recommended)",selected:mailMode()==="gmail"}),el("option",{value:"app",text:"My computer’s mail app",selected:mailMode()==="app"})]);
+  b.appendChild(el("div",{class:"grid2"},[el("div",{class:"field"},[el("label",{text:"RCA TAT target (hours)"}),sla]),el("div",{class:"field"},[el("label",{text:"Send email opens in"}),mm])]));
   b.appendChild(el("div",{class:"foot"},[el("button",{class:"btn",type:"button",text:"Close",onclick:function(){$("dlgSettings").close();}}),
     S.canWrite?el("button",{class:"btn primary",type:"button",text:"Save settings",onclick:function(e){
       var v={linkTemplate:tpl.value.trim(),slaHours:Math.max(1,Math.round(Number(sla.value)||48))};
