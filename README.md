@@ -70,3 +70,53 @@ With that set, Confirm sends the email straight from the admin's Gmail. Google a
 - **Keep the key private.** Anyone who has the full link with the key can see the chats, including order IDs and what customers said. Only share it with the two people using the tracker. If it leaks, make a new key, update the Firestore rule, and send the new link. The old data stays under the old key, so ask Claude to migrate it if needed.
 - **Free plan limits.** The free plan allows about 50,000 database reads a day; check <https://firebase.google.com/pricing>. With two users you'll stay far below it. Nothing is ever charged; if the limit were hit, the tracker would pause until the next day.
 - **Real-time Freshchat data.** For live data instead of CSV imports, a backend would receive Freshchat webhooks and write to `workspaces/<key>/tickets` in Firestore.
+
+---
+
+## Live Freshchat sync on Vercel (no imports)
+
+The `api/` folder holds two serverless functions that Vercel runs next to the tracker:
+
+| Function | What it does |
+| --- | --- |
+| `api/freshchat-webhook.js` | Freshchat calls this whenever a message arrives or a chat is assigned, resolved or reopened. It looks the chat up in the Freshchat API and creates or updates its row in the tracker: date, customer message, order ID, channel, chat link, L1 and L2. |
+| `api/sync.js` | Runs once a day (Vercel cron, about 06:00 IST). It re-checks the last 7 days of chats that are still untagged and fills in any category agents added later. |
+
+The tracker page updates live, so new chats appear within seconds of the customer writing.
+
+### 1. Environment variables (Vercel → Project → Settings → Environment Variables)
+
+| Name | Value |
+| --- | --- |
+| `FRESHCHAT_API_KEY` | Freshchat API token (Freshchat → Admin → API Tokens) |
+| `FRESHCHAT_BASE` | `https://homerun-team-d09d641d432c3b917703943.freshchat.com/v2` |
+| `FRESHCHAT_WEBHOOK_PUBLIC_KEY` | The public key shown on Freshchat's webhook settings page (paste the whole block) |
+| `TRACKER_KEY` | The tracker access key (the same one in your Firestore rules) |
+| `FIREBASE_API_KEY` | `apiKey` from `config.js` |
+| `FIREBASE_PROJECT_ID` | `homerun-cs-tracker` |
+| `CRON_SECRET` | Any long random string. Vercel sends it to `/api/sync` automatically. |
+
+Optional settings:
+- `L1_FIELD` and `L2_FIELD` override the Freshchat fields. The defaults are `cf_issue_subcategory` and `cf_root_cause`.
+- `FRESHCHAT_WEBHOOK_VERIFY=off` turns off the signature check. Use it only to debug, then remove it.
+
+After adding or changing variables, redeploy: go to Deployments → ⋯ → Redeploy.
+
+### 2. Check the function
+Open `https://<your-project>.vercel.app/api/freshchat-webhook` in a browser. It should show `"ok": true` with an empty `missing` list.
+
+### 3. Point Freshchat at it
+1. In Freshchat, open Admin → Webhooks (also listed as Settings → Integrations → Webhooks).
+2. Turn webhooks on and set the URL to `https://<your-project>.vercel.app/api/freshchat-webhook`.
+3. Select the events **Message Create**, **Conversation Assignment**, **Conversation Resolution** and **Conversation Reopen**.
+4. Copy the **public key** shown there into `FRESHCHAT_WEBHOOK_PUBLIC_KEY`, then redeploy.
+
+### 4. Test
+Send a message from the HomeRun app's chat. A new row should appear in the tracker within a few seconds. If it doesn't, open Vercel → Project → Logs and filter by `freshchat-webhook`; each event logs what happened.
+
+### Notes
+- **What gets created.** Only chats where the customer wrote something, or that have a category, become rows. Outbound-only threads, such as WhatsApp order confirmations, are skipped.
+- **When tags arrive.** L1/L2 usually arrive when an agent resolves the chat. The daily sync catches anything tagged later. To run it by hand, use `curl -H "Authorization: Bearer <CRON_SECRET>" "https://<your-project>.vercel.app/api/sync?days=7"`.
+- **Hand-set tags.** Tags set by hand in the tracker are never overwritten.
+- **Older chats.** History from before the webhook was switched on comes from the CSV import you've already done.
+- **Free plan limits.** The free Vercel plan runs the cron once a day. Webhooks are real-time on any plan.
