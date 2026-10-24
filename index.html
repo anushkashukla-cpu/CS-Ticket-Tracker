@@ -156,6 +156,31 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
 .gate .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;max-width:420px;display:flex;flex-direction:column;gap:12px}
 .gate h2{margin:0;font-size:19px} .gate p{margin:0;color:var(--muted)}
 .who{color:var(--muted);font-size:12.5px;align-self:center}
+.badge{display:inline-block;font-size:10.5px;font-weight:600;border-radius:4px;padding:0 5px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px}
+.tatsel{border:1px solid var(--line-strong);border-radius:6px;padding:4px 6px;background:var(--surface);font-size:13px}
+.catsum{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.catsum>button.head{width:100%;display:flex;justify-content:space-between;align-items:center;border:none;background:none;padding:11px 14px;cursor:pointer;font-weight:600}
+.catsum>button.head .muted{font-weight:400;font-size:12.5px}
+.catsum .inner{overflow:auto;max-height:420px;border-top:1px solid var(--line)}
+.catsum table{min-width:640px}
+.catsum th,.catsum td{padding:7px 12px;font-size:13px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.catsum th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-weight:600;z-index:1}
+.catsum th:first-child,.catsum td:first-child{text-align:left;white-space:normal}
+.catsum tr.l1 td{font-weight:600}
+.catsum tr.l2 td:first-child{padding-left:34px;font-weight:400}
+.catsum td button.lnk{border:none;background:none;padding:0;color:var(--ink);cursor:pointer;text-align:left;font:inherit}
+.catsum td button.lnk:hover{color:var(--accent);text-decoration:underline}
+.catsum td button.tog{border:none;background:none;cursor:pointer;color:var(--muted);width:18px;padding:0;margin-right:4px}
+.catsum .bar2{display:inline-block;height:6px;border-radius:3px;background:var(--accent);opacity:.55;vertical-align:middle;margin-right:8px}
+dialog.wide{width:min(1040px,calc(100vw - 24px))}
+.rules{border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:52vh}
+.rules table{min-width:760px}
+.rules th,.rules td{padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px;text-align:left;vertical-align:middle}
+.rules th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);z-index:1}
+.rules input{width:100%;border:1px solid var(--line-strong);border-radius:6px;padding:5px 7px;background:var(--surface);font-size:13px;min-width:0}
+.rules .warnname{color:var(--warn);font-size:12px}
+.olist .o input{border:1px solid var(--line-strong);border-radius:6px;padding:4px 7px;background:var(--surface);font-size:13px;min-width:0;width:100%}
+.olist .o .oname{flex:0 0 32%} .olist .o .oemail{flex:1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -168,6 +193,7 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
       <p class="sub" id="subline">Freshchat conversations, product owner assignment and RCA</p>
     </div>
     <div class="actions">
+      <button class="btn" id="btnRules" type="button">Assignment rules</button>
       <button class="btn" id="btnSettings" type="button">Product owners &amp; settings</button>
       <button class="btn primary" id="btnImport" type="button">Import Freshchat export</button>
     </div>
@@ -188,6 +214,8 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
 
   <div class="tally" id="tally"></div>
 
+  <section class="catsum" id="catSummary"></section>
+
   <div class="tablebox">
     <table>
       <thead><tr id="headRow"></tr></thead>
@@ -200,6 +228,7 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
 
 <dialog id="dlgImport"><div class="dlg" id="importBody"></div></dialog>
 <dialog id="dlgSettings"><div class="dlg" id="settingsBody"></div></dialog>
+<dialog id="dlgRules" class="wide"><div class="dlg" id="rulesBody"></div></dialog>
 
 <script>
 (function(){
@@ -217,8 +246,13 @@ function $(id){return document.getElementById(id)}
 var NONE="__none", UNASSIGNED="__unassigned";
 var CFG=window.TRACKER_CONFIG||{};
 var BASE_URL=CFG.appUrl||location.href.split("#")[0], TRACKER_URL=BASE_URL;
-var L1_LIST=["After Sales Query","App & Tech Issues","Delivered Product Issue","Delivery","HomeRun Related Queries","Order Mgmt","Payments & Invoicing","Pre Order Queries","Return or Refund"];
+var L1_LIST=["After Sales Query","App & Tech Issues","Delivered Product Issue","Delivery","HomeRun Related Queries","No Action Needed","Order Mgmt","Payments & Invoicing","Pre Order Queries","Return or Refund"];
 var L2_LIST=["Add GST - Convert to B2B Invoice","App crash / not loading","Cancel Order (Duplicate Order)","Cancel order (after dispatch)","Cancel order (before dispatch)","Change delivery address","Checkout / payment failure","DP misconduct / behaviour Critical","Damaged Items received","Delivery Address - Minor Variation","Delivery area / serviceability check","Delivery charge query","Discount / offer / coupon inquiry","Double Payment done by CX","Invoice Correction apart from GST change","Invoice not received - requesting invoice","Modify order (add / remove / change)","Order confirmation / status check","Payment deducted - Not Updated in Shopify","Payment method change request","Poor Product Quality","Poor quality / expired / substandard","Post-delivery product guidance","Price / B2B Price inquiry","Price discrepancy on order","Product Addition Request","Product availability / stock check","Product specs / brand / dimensions","Receiver Number added/updated","Refund status / follow-up","Reschedule Delivery","Return / exchange request","Returned at Delivery","Updated amount payment link requested","Vendor / B2B / partnership inquiry","WISMO","WISMO Delayed - Critical","WISMO Immediate","Warranty query","Wrong item received"];
+/* Default auto-assignment rules (from "L1 and L2 Mapping alongside the product owners"). Saved to the database on first open and editable under Assignment rules. */
+var DEFAULT_ROUTING=[["After Sales Query", "Post-delivery product guidance", ["Category Owner"]], ["App & Tech Issues", "Cashback Issue", ["Rakesh"]], ["Delivered Product Issue", "Missing / short items", ["Supply chain Owner"]], ["Delivered Product Issue", "Damaged Items received", ["Supply chain Owner"]], ["Delivered Product Issue", "Wrong item received", ["Supply chain Owner"]], ["Delivered Product Issue", "Poor quality / expired / substandard", ["Category Owner"]], ["Delivered Product Issue", "Fake Product Complaint", ["Category Owner"]], ["Delivery", "WISMO Delayed - Critical", ["Ops team", "Rahul"]], ["Delivery", "WISMO Immediate", ["Romil", "Rahul"]], ["No Action Needed", "Greeting only — no issue stated", ["Romil", "Anushka"]], ["No Action Needed", "Bot / vendor auto-reply", ["Romil", "Anushka"]], ["No Action Needed", "Payment confirmation (auto-message)", ["Nishith"]], ["No Action Needed", "System / platform message", ["Romil", "Anushka"]], ["Order Mgmt", "Change delivery address", ["Romil", "Nishith"]], ["Order Mgmt", "Delivery Address - Minor Variation", ["Nishith"]], ["Order Mgmt", "Cancel order (before dispatch)", ["Romil"]], ["Order Mgmt", "Order confirmation / status check", ["Romil"]], ["Order Mgmt", "Reschedule Delivery", ["Nishith"]], ["Order Mgmt", "Receiver Number added/updated", ["Nishith"]], ["Order Mgmt", "Cancel Order - Dispatch/Delivery Delayed", ["Ops team"]], ["Order Mgmt", "Cancel Order (Duplicate Order)", ["Nishith"]], ["Order Mgmt", "Cancel order (after dispatch)", ["Romil"]], ["Payments & Invoicing", "Invoice not received - requesting invoice", ["Anushka"]], ["Payments & Invoicing", "Invoice Correction apart from GST change", ["Romil"]], ["Payments & Invoicing", "Updated amount payment link requested", ["Romil"]], ["Pre Order Queries", "Discount / offer / coupon inquiry", ["Nishith"]], ["Return or Refund", "Return / exchange request", ["Romil"]], ["Return or Refund", "Refund status / follow-up", ["Romil"]], ["After Sales Query", "Product stopped working", ["Category Owner"]], ["After Sales Query", "Warranty query", ["Category Owner"]], ["After Sales Query", "Poor Product Quality", ["Category Owner"]], ["After Sales Query", "Poor After Sales Brand Service", ["Category Owner"]], ["After Sales Query", "Compliment", ["Category Owner"]], ["App & Tech Issues", "Location mismatch - Tech Issue", ["Nishith"]], ["App & Tech Issues", "Double Payment done by CX", ["Nishith"]], ["App & Tech Issues", "GST Not Auto-Added", ["Nishith"]], ["Delivery", "WISMO", ["Rahul"]], ["Delivery", "Unloading / floor delivery expectation mismatch", ["Nishith"]], ["Delivery", "DP Misconduct / Behaviour Critical", ["Ops team"]], ["Delivery", "Unloader Misconduct Critical", ["Ops team"]], ["Order Mgmt", "Modify order (add / remove / change)", ["Romil"]], ["Payments & Invoicing", "Add GST - Convert to B2B Invoice", ["Romil"]], ["Return or Refund", "Refund Not Received - Critical", ["Romil"]], ["Return or Refund", "Returned at Delivery", ["Romil"]], ["Return or Refund", "Return pickup not done", ["Romil"]], ["Return or Refund", "Item returned in non saleable condition - Refund Halted", ["Romil"]], ["Pre Order Queries", "Product availability / stock check", ["Category Owner"]], ["Pre Order Queries", "Price / B2B Price inquiry", ["Nishith"]], ["Pre Order Queries", "Product specs / brand / dimensions", ["Category Owner"]], ["Pre Order Queries", "COD Availability Check", ["Nishith"]], ["Pre Order Queries", "COD Blocked - Customer Checking", ["Nishith"]], ["Pre Order Queries", "Vendor / B2B / partnership inquiry", ["Anushka"]], ["Pre Order Queries", "Unloading/Shifting Query", ["Nishith"]], ["Pre Order Queries", "Product Addition Request", ["Nishith"]], ["HomeRun Related Queries", "How to place an order", ["Nishith"]], ["HomeRun Related Queries", "How to track my order", ["Rahul"]], ["HomeRun Related Queries", "How to use app features", ["Anushka"]], ["HomeRun Related Queries", "How to request invoice / GST bill", ["Anushka"]], ["HomeRun Related Queries", "Delivery area / serviceability check", ["Nishith"]], ["App & Tech Issues", "App crash / not loading", ["Nishith"]], ["App & Tech Issues", "Checkout / payment failure", ["Nishith"]], ["App & Tech Issues", "Login / account access issue", ["Nishith"]], ["App & Tech Issues", "Order / cart not showing correctly", ["Nishith"]], ["App & Tech Issues", "Search / catalogue not loading", ["Chandra Sekhar Sahu"]], ["App & Tech Issues", "Payment failed / deducted — order not placed", ["Nishith"]], ["App & Tech Issues", "Catalog Mismatch", ["Chandra Sekhar Sahu"]], ["App & Tech Issues", "Credit Related Query", ["Anushka"]], ["App & Tech Issues", "Unable to Place the Order", ["Nishith"]], ["App & Tech Issues", "Payment deducted - Not Updated in Shopify", ["Nishith"]], ["Delivery", "WISMO Tracking Unavailable", ["Rahul"]], ["Payments & Invoicing", "Delivery charge query", ["Nishith"]], ["Payments & Invoicing", "Price discrepancy on order", ["Nishith"]], ["Payments & Invoicing", "Advance / part payment request", ["Nishith"]], ["Payments & Invoicing", "Payment method change request", ["Romil"]], ["Delivered Product Issue", "Colour Code Mismatch", ["Nishith"]], ["Return or Refund", "Returned at Delivery - Poor Product Condition", ["Ops team"]]];
+var DEFAULT_OWNERS=[{name:"Romil",email:"romil.seth@home-run.co"},{name:"Anushka",email:"anushka.shukla@home-run.co"},{name:"Nishith",email:""},{name:"Rahul",email:""},{name:"Rakesh",email:""},{name:"Chandra Sekhar Sahu",email:""},{name:"Category Owner",email:""},{name:"Supply chain Owner",email:""},{name:"Ops team",email:""}];
+var TAT_OPTIONS=[4,8,12,24,48,72,120,168];
+function rkey(v){ return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g,""); }
 function normKey(v){ return String(v).toLowerCase().replace(/\s+/g," ").trim(); }
 var CANON={}; L1_LIST.concat(L2_LIST).forEach(function(v){ CANON[normKey(v)]=v; });
 function canon(v){ var c=clean(v); if(!c||/^\(?blank\)?$/i.test(c)) return ""; return CANON[normKey(c)]||c.replace(/\s+/g," "); }
@@ -246,7 +280,7 @@ function parseDate(v){
 function parseActive(v){ if(blank(v)) return ""; var s=String(v).trim().toLowerCase(); if(/^(y|yes|true|1|active)$/.test(s)) return "Yes"; if(/^(n|no|false|0|inactive)$/.test(s)) return "No"; return String(v).trim(); }
 
 /* ---------- state ---------- */
-var S={linkOpen:{},db:null,auth:null,user:null,uid:null,canWrite:true,gmailToken:null,gmailExp:0,sending:{},
+var S={routes:[],routesLoaded:false,ownersLoaded:false,catOpen:{},linkOpen:{},db:null,auth:null,user:null,uid:null,canWrite:true,gmailToken:null,gmailExp:0,sending:{},
   tickets:[],owners:[],settings:{linkTemplate:"",slaHours:48},
   range:"week",search:"",quick:null,
   filters:{l1:null,l2:null,channel:null,active:null,owner:null,email:null,rca:null},
@@ -260,10 +294,44 @@ function rangeStart(){
   return null;
 }
 function ownerOf(t){ if(!t.ownerId) return null; for(var i=0;i<S.owners.length;i++) if(S.owners[i].id===t.ownerId) return S.owners[i]; return {id:t.ownerId,name:t.ownerName||"Removed owner",email:t.ownerEmail||""}; }
+function findOwner(name){
+  var n=rkey(name); if(!n) return null;
+  return S.owners.filter(function(o){ return rkey(o.name)===n; })[0] ||
+    S.owners.filter(function(o){ return rkey(String(o.name).split(/\s+/)[0])===n; })[0] || null;
+}
+function ownerIdsOf(t){ return Array.isArray(t.ownerIds)&&t.ownerIds.length?t.ownerIds:(t.ownerId?[t.ownerId]:[]); }
+function ownersOf(t){
+  var names=String(t.ownerName||"").split(/\s*,\s*/);
+  return ownerIdsOf(t).map(function(id,i){ return S.owners.filter(function(o){return o.id===id;})[0]||{id:id,name:names[i]||"Removed owner",email:""}; });
+}
+function combine(list){
+  if(!list.length) return null;
+  return {id:list[0].id,list:list,name:list.map(function(o){return o.name;}).join(", "),
+    email:list.filter(function(o){return o.email;}).map(function(o){return o.email;}).join(","),
+    missing:list.filter(function(o){return !o.email;}).map(function(o){return o.name;})};
+}
+function routeFor(l1,l2){
+  if(!l2) return null; var p=rkey(l1)+"|"+rkey(l2), k2=rkey(l2), hit=null, byL2=null;
+  S.routes.forEach(function(r){ if(rkey(r.l1)+"|"+rkey(r.l2)===p) hit=r; else if(!byL2 && rkey(r.l2)===k2) byL2=r; });
+  return hit||byL2;
+}
+function routeOwners(r){ if(!r) return []; var out=[]; (r.owners||[]).forEach(function(n){ var o=findOwner(n); if(o && out.indexOf(o)<0) out.push(o); }); return out; }
+function assignPatch(list,auto){
+  return {ownerId:list[0].id,ownerIds:list.map(function(o){return o.id;}),ownerName:list.map(function(o){return o.name;}).join(", "),
+    ownerEmail:list.filter(function(o){return o.email;}).map(function(o){return o.email;}).join(","),
+    assignedAt:new Date().toISOString(),assignedBy:auto?"auto":null,autoAssigned:!!auto,autoAssignOff:false,
+    emailSentAt:null,emailDraftedAt:null,emailTo:null,emailError:null};
+}
+function unassignPatch(off){ return {ownerId:null,ownerIds:[],ownerName:null,ownerEmail:null,assignedAt:null,assignedBy:null,autoAssigned:false,autoAssignOff:!!off,emailSentAt:null,emailDraftedAt:null,emailTo:null,emailError:null}; }
+function targetHours(t){ return Number(t.expectedTatHours)||S.settings.slaHours; }
+function tatStart(t){ return t.assignedAt||t.createdAt||null; }
+function allL2(){ var seen={}, out=[]; L2_LIST.concat(S.routes.map(function(r){return r.l2;})).concat(S.tickets.map(function(t){return t.l2;})).forEach(function(v){ if(v && !seen[rkey(v)]){ seen[rkey(v)]=1; out.push(v); } }); return out.sort(function(a,b){return a.localeCompare(b);}); }
+function l2For(l1){ var seen={}, out=[]; S.routes.forEach(function(r){ if(rkey(r.l1)===rkey(l1) && !seen[rkey(r.l2)]){ seen[rkey(r.l2)]=1; out.push(r.l2); } }); S.tickets.forEach(function(t){ if(t.l2 && rkey(t.l1)===rkey(l1) && !seen[rkey(t.l2)]){ seen[rkey(t.l2)]=1; out.push(t.l2); } }); return out.sort(function(a,b){return a.localeCompare(b);}); }
+
 function chatUrl(t){ if(t.chatUrl) return t.chatUrl; if(t.convId&&S.settings.linkTemplate&&S.settings.linkTemplate.indexOf("{id}")>=0) return S.settings.linkTemplate.split("{id}").join(encodeURIComponent(t.convId)); return ""; }
 function atts(t){ return Array.isArray(t.attachments)?t.attachments.slice():[]; }
-function rcaState(t){ if(!t.ownerId) return "notassigned"; return atts(t).length?"attached":"pending"; }
-function overSla(t){ if(!t.assignedAt) return false; var end=t.rcaAt?new Date(t.rcaAt):new Date(); return (end-new Date(t.assignedAt))>S.settings.slaHours*3600000; }
+function rcaState(t){ if(atts(t).length) return "attached"; return t.ownerId?"pending":"notassigned"; }
+function overSla(t){ if(!t.assignedAt) return false; var end=t.rcaAt?new Date(t.rcaAt):new Date(); return (end-new Date(t.assignedAt))>targetHours(t)*3600000; }
 
 /* ---------- columns & filters ---------- */
 var FILTERS={
@@ -279,7 +347,7 @@ var COLS=[
   {key:"when",label:"Date & time"},{key:"l1",label:"L1",f:"l1"},{key:"l2",label:"L2",f:"l2"},
   {key:"order",label:"Order ID"},{key:"channel",label:"Channel",f:"channel"},{key:"msg",label:"Customer said"},
   {key:"active",label:"Active order",f:"active"},{key:"chat",label:"Chat"},{key:"owner",label:"Product owner & email",f:"owner"},
-  {key:"rca",label:"RCA attachments",f:"rca"},{key:"tat",label:"RCA TAT"}
+  {key:"rca",label:"RCA attachments",f:"rca"},{key:"etat",label:"Expected TAT"},{key:"tat",label:"RCA TAT"}
 ];
 var QUICK=[
   {k:"all",l:"Chats in range",test:function(){return true}},
@@ -295,7 +363,9 @@ function baseRows(skip){
   var q=S.search.trim().toLowerCase();
   return S.tickets.filter(function(t){
     if(q && (String(t.orderId||"")+" "+String(t.message||"")+" "+String(t.convId||"")).toLowerCase().indexOf(q)<0) return false;
-    for(var k in S.filters){ if(k===skip) continue; var v=S.filters[k]; if(v!=null && FILTERS[k].get(t)!==v) return false; }
+    for(var k in S.filters){ if(k===skip||(skip&&skip.indexOf&&skip.indexOf(k)>=0&&typeof skip!=="string")) continue; var v=S.filters[k]; if(v==null) continue;
+      if(k==="owner"){ var ids=ownerIdsOf(t); if(v===UNASSIGNED?ids.length:ids.indexOf(v)<0) return false; continue; }
+      if(FILTERS[k].get(t)!==v) return false; }
     return true;
   });
 }
@@ -341,7 +411,7 @@ function tagCell(t,k){
 }
 
 function rowEl(t){
-  var d=t.createdAt?new Date(t.createdAt):null, url=chatUrl(t), own=ownerOf(t), id=t.id;
+  var d=t.createdAt?new Date(t.createdAt):null, url=chatUrl(t), own=combine(ownersOf(t)), id=t.id;
   var tds=[];
   tds.push(el("td",{class:"when"},d?[el("div",{class:"d",text:dFmt.format(d)}),el("div",{class:"t",text:tFmt.format(d)})]:["—"]));
   tds.push(el("td",null,[tagCell(t,"l1")]));
@@ -354,21 +424,26 @@ function rowEl(t){
   tds.push(el("td",null,[url?el("a",{href:url,target:"_blank",rel:"noopener noreferrer",text:"Open chat"}):el("span",{class:"faint",text:t.convId?"Set link format":"No link"})]));
   tds.push(el("td",null,[ownerCell(t,own,url)]));
   tds.push(el("td",null,[rcaCell(t)]));
+  tds.push(el("td",null,[etatCell(t)]));
   tds.push(el("td",null,[tatCell(t)]));
   return el("tr",{"data-id":id},tds);
 }
 function ownerCell(t,own,url){
   var id=t.id, box=el("div",{class:"owner"});
   if(own && !S.changing[id]){
-    box.appendChild(el("span",{class:"nm",text:own.name}));
+    box.appendChild(el("span",{class:"nm"},[own.name,t.autoAssigned?el("span",{class:"badge",title:"Assigned automatically by the assignment rules",text:"Auto"}):null]));
+    if(own.missing.length) box.appendChild(el("span",{class:"mail warn",text:"No email for "+own.missing.join(", ")}));
     box.appendChild(el("span",{class:"faint",text:"Assigned "+(t.assignedAt?dtFmt.format(new Date(t.assignedAt)):"")}));
     box.appendChild(mailStatus(t,own));
     var meta=el("div",{class:"meta"});
     if(own.email && S.canWrite && !S.sending[id]) meta.appendChild(el("button",{class:"btn link",type:"button",text:(t.emailSentAt||t.emailDraftedAt)?"Send again":"Send email",onclick:function(){ sendEmail(t,own); }}));
     if(S.canWrite) meta.appendChild(el("button",{class:"btn link",type:"button",text:"Change",onclick:function(){S.changing[id]=true; S.choice[id]=t.ownerId; render();}}));
+    if(S.canWrite) meta.appendChild(el("button",{class:"btn link",type:"button",text:"Unassign",onclick:function(){ S.db.collection("tickets").doc(id).update(unassignPatch(true)).catch(function(e){ toast(errText(e,"Couldn’t unassign.")); }); }}));
     box.appendChild(meta); return box;
   }
   if(!S.canWrite){ box.appendChild(el("span",{class:"faint",text:"Unassigned"})); return box; }
+  if(!S.changing[id] && t.l2 && !t.autoAssignOff){ var ro=routeOwners(routeFor(t.l1,t.l2)); if(!ro.length && routeFor(t.l1,t.l2)) box.appendChild(el("span",{class:"faint",text:"Rule names "+(routeFor(t.l1,t.l2).owners||[]).join(", ")+"; add them under Product owners"})); }
+  if(!S.changing[id] && !t.l2) box.appendChild(el("span",{class:"faint",text:"Auto-assigns once L2 is set"}));
   if(!S.owners.length){ box.appendChild(el("button",{class:"btn link",type:"button",text:"Add product owners first",onclick:openSettings})); return box; }
   var sel=el("select",{"aria-label":"Product owner",onchange:function(e){S.choice[id]=e.target.value; btn.disabled=!e.target.value;}},
     [el("option",{value:"",text:"Choose owner"})].concat(S.owners.map(function(o){ return el("option",{value:o.id,text:o.name,selected:S.choice[id]===o.id}); })));
@@ -386,7 +461,6 @@ function linkKind(u){ u=String(u||"");
   return "LINK"; }
 function rcaCell(t){
   var box=el("div",{class:"rca"}), id=t.id;
-  if(!t.ownerId){ box.appendChild(el("span",{class:"faint",text:"Assign an owner first"})); return box; }
   var list=atts(t);
   list.forEach(function(a){
     var link=a.url?el("a",{href:a.url,target:"_blank",rel:"noopener noreferrer",title:a.url,text:a.name||"RCA link"}):el("span",{class:"faint",text:a.name});
@@ -408,16 +482,57 @@ function rcaCell(t){
   }
   return box;
 }
+function etatCell(t){
+  var cur=Number(t.expectedTatHours)||0;
+  if(!S.canWrite) return cur?el("span",{text:cur+"h"}):el("span",{class:"faint",text:"Not set"});
+  var opts=[el("option",{value:"",text:"Not set ("+S.settings.slaHours+"h default)"})].concat(TAT_OPTIONS.map(function(h){ return el("option",{value:String(h),text:h<24?h+" hrs":(h%24?h+" hrs":(h/24)+(h===24?" day":" days")+" ("+h+"h)"),selected:cur===h}); }));
+  if(cur && TAT_OPTIONS.indexOf(cur)<0) opts.push(el("option",{value:String(cur),text:cur+" hrs",selected:true}));
+  opts.push(el("option",{value:"custom",text:"Custom…"}));
+  return el("select",{class:"tatsel","aria-label":"Expected TAT",onchange:function(e){
+    var v=e.target.value, n=null;
+    if(v==="custom"){ var a=prompt("Expected TAT in hours (for example 36):",cur?String(cur):""); if(a===null){ render(); return; } n=Math.round(Number(a)); if(!(n>0)){ toast("Enter a number of hours."); render(); return; } }
+    else if(v) n=Number(v);
+    S.db.collection("tickets").doc(t.id).update({expectedTatHours:n,expectedTatSetAt:new Date().toISOString()}).catch(function(er){ toast(errText(er,"Couldn’t save the expected TAT.")); });
+  }},opts);
+}
 function tatCell(t){
-  if(!t.assignedAt) return el("span",{class:"faint",text:"—"});
-  var start=new Date(t.assignedAt), sla=S.settings.slaHours*3600000;
-  if(t.rcaAt){ var ms=new Date(t.rcaAt)-start; return el("span",{class:"tat "+(ms>sla?"bad":"ok")},[fmtDur(ms),el("small",{text:ms>sla?"Over target":"Within target"})]); }
-  var run=Date.now()-start; return el("span",{class:"tat "+(run>sla?"bad":"warn"),"data-running":t.assignedAt},[fmtDur(run),el("small",{text:run>sla?"Open, over target":"Open"})]);
+  var s0=tatStart(t); if(!s0) return el("span",{class:"faint",text:"—"});
+  var start=new Date(s0), hrs=targetHours(t), sla=hrs*3600000, from=t.assignedAt?"":" since chat";
+  if(t.rcaAt){ var ms=new Date(t.rcaAt)-start; return el("span",{class:"tat "+(ms>sla?"bad":"ok")},[fmtDur(ms),el("small",{text:(ms>sla?"Over ":"Within ")+hrs+"h target"+from})]); }
+  if(!t.assignedAt) return el("span",{class:"faint",text:"Starts on assignment"});
+  var run=Date.now()-start; return el("span",{class:"tat "+(run>sla?"bad":"warn"),"data-running":t.assignedAt},[fmtDur(run),el("small",{text:(run>sla?"Open, over ":"Open, ")+hrs+"h target"})]);
+}
+
+/* ---------- ticket counts by L1 / L2 (live) ---------- */
+function renderCatSummary(){
+  var box=$("catSummary"); box.textContent="";
+  var rows=baseRows(["l1","l2"]);
+  var open=true; try{ open=localStorage.getItem("hr_cat_open")!=="0"; }catch(_){}
+  var groups={}, order=[];
+  rows.forEach(function(t){ var a=t.l1||NONE, b=t.l2||NONE; var g=groups[a]; if(!g){ g=groups[a]={k:a,n:0,un:0,pend:0,done:0,subs:{}}; order.push(a); }
+    var sg=g.subs[b]||(g.subs[b]={k:b,n:0,un:0,pend:0,done:0});
+    [g,sg].forEach(function(x){ x.n++; var st=rcaState(t); if(!t.ownerId) x.un++; if(st==="pending") x.pend++; if(st==="attached") x.done++; }); });
+  order.sort(function(a,b){ if((a===NONE)!==(b===NONE)) return a===NONE?1:-1; return groups[b].n-groups[a].n; });
+  var head=el("button",{class:"head",type:"button","aria-expanded":open?"true":"false",onclick:function(){ try{ localStorage.setItem("hr_cat_open",open?"0":"1"); }catch(_){} renderCatSummary(); }},
+    [el("span",null,["Tickets by category ",el("span",{class:"muted",text:"("+rows.length+" in range, "+order.length+" categories)"})]),el("span",{class:"muted",text:open?"Hide ▲":"Show ▼"})]);
+  box.appendChild(head); if(!open) return;
+  var max=order.reduce(function(m,k){ return Math.max(m,groups[k].n); },1);
+  var tb=el("tbody");
+  function nameBtn(label,l1,l2){ return el("button",{class:"lnk",type:"button",title:"Show these chats in the table",onclick:function(){ S.filters.l1=l1; S.filters.l2=l2; S.quick=null; render(); }},[label]); }
+  order.forEach(function(k){ var g=groups[k], isOpen=!!S.catOpen[k];
+    tb.appendChild(el("tr",{class:"l1"},[el("td",null,[el("button",{class:"tog",type:"button","aria-label":isOpen?"Collapse":"Expand",onclick:function(){ S.catOpen[k]=!isOpen; renderCatSummary(); }},[isOpen?"▾":"▸"]),
+      el("span",{class:"bar2",style:"width:"+Math.max(4,Math.round(g.n/max*80))+"px"}),nameBtn(k===NONE?"Not tagged":k,k,null)]),
+      el("td",{text:String(g.n)}),el("td",{text:String(g.un)}),el("td",{text:String(g.pend)}),el("td",{text:String(g.done)})]));
+    if(isOpen) Object.keys(g.subs).map(function(x){return g.subs[x];}).sort(function(a,b){ return b.n-a.n; }).forEach(function(sg){
+      tb.appendChild(el("tr",{class:"l2"},[el("td",null,[nameBtn(sg.k===NONE?"Not tagged":sg.k,k,sg.k)]),el("td",{text:String(sg.n)}),el("td",{text:String(sg.un)}),el("td",{text:String(sg.pend)}),el("td",{text:String(sg.done)})]));
+    });
+  });
+  box.appendChild(el("div",{class:"inner"},[el("table",null,[el("thead",null,[el("tr",null,["L1 / L2","Tickets","Unassigned","Awaiting RCA","RCA attached"].map(function(h){return el("th",{scope:"col",text:h});}))]),tb])]));
 }
 
 function render(){
   // drop an L2 filter that no longer matches the chosen L1
-  renderHead(); renderChips(); renderTally();
+  renderHead(); renderChips(); renderTally(); renderCatSummary();
   var rows=visibleRows(), body=$("body"); body.textContent="";
   var frag=document.createDocumentFragment(); rows.forEach(function(t){frag.appendChild(rowEl(t));}); body.appendChild(frag);
   var eb=$("emptyBox"); eb.textContent="";
@@ -445,9 +560,11 @@ var pop=null;
 function closePop(){ if(pop){pop.remove(); pop=null;} }
 function openFilter(k,anchor){
   closePop();
-  var counts={}; baseRows(k).forEach(function(t){ var v=FILTERS[k].get(t); counts[v]=(counts[v]||0)+1; });
+  var counts={}; baseRows(k).forEach(function(t){
+    if(k==="owner"){ var ids=ownerIdsOf(t); if(!ids.length) counts[UNASSIGNED]=(counts[UNASSIGNED]||0)+1; ids.forEach(function(id){ counts[id]=(counts[id]||0)+1; }); return; }
+    var v=FILTERS[k].get(t); counts[v]=(counts[v]||0)+1; });
   if(k==="owner") S.owners.forEach(function(o){ if(!(o.id in counts)) counts[o.id]=0; });
-  if(k==="l1"||k==="l2"){ if(!(NONE in counts)) counts[NONE]=0; if(!(k==="l2"&&S.filters.l1)) (k==="l1"?L1_LIST:L2_LIST).forEach(function(v){ if(!(v in counts)) counts[v]=0; }); }
+  if(k==="l1"||k==="l2"){ if(!(NONE in counts)) counts[NONE]=0; if(!(k==="l2"&&S.filters.l1)) (k==="l1"?L1_LIST:allL2()).forEach(function(v){ if(!(v in counts)) counts[v]=0; }); }
   var vals=Object.keys(counts).sort(function(a,b){ var sa=a===NONE||a===UNASSIGNED, sb=b===NONE||b===UNASSIGNED; if(sa!==sb) return sa?-1:1; return FILTERS[k].name(a).localeCompare(FILTERS[k].name(b)); });
   var cur=S.filters[k], list=el("ul",{role:"listbox"});
   function item(v,label,c){ return el("li",null,[el("button",{type:"button",role:"option","aria-checked":(cur===v)?"true":"false",onclick:function(){ S.filters[k]=v; if(k==="l1") S.filters.l2=null; closePop(); render(); }},[el("span",{text:label}),c!=null?el("span",{class:"c",text:String(c)}):null])]); }
@@ -462,14 +579,21 @@ function openFilter(k,anchor){
 }
 function openTag(t,k,anchor){
   closePop();
-  var vals=[""].concat(k==="l1"?L1_LIST:L2_LIST), list=el("ul",{role:"listbox"});
+  var under=k==="l2"&&t.l1?l2For(t.l1):[], rest=(k==="l1"?L1_LIST:allL2()).filter(function(v){ return under.map(rkey).indexOf(rkey(v))<0; });
+  var vals=[""].concat(under,rest), list=el("ul",{role:"listbox"});
   function fill(q){ list.textContent=""; vals.forEach(function(v){ var nm=v||"Not tagged"; if(q&&nm.toLowerCase().indexOf(q)<0) return;
     list.appendChild(el("li",null,[el("button",{type:"button",role:"option","aria-checked":(t[k]||"")===v?"true":"false",onclick:function(){
-      closePop(); var patch={tagManual:true}; patch[k]=v;
+      closePop(); var patch={tagManual:true,tagEditedAt:new Date().toISOString()}; patch[k]=v;
+      var nt=Object.assign({},t,patch);
+      if((!t.ownerId||t.autoAssigned) && !t.emailSentAt && !t.emailDraftedAt && !t.autoAssignOff){
+        var ro=routeOwners(routeFor(nt.l1,nt.l2));
+        if(ro.length){ if(ownerIdsOf(t).join()!==ro.map(function(o){return o.id;}).join()) Object.assign(patch,assignPatch(ro,true)); }
+        else if(t.autoAssigned) Object.assign(patch,unassignPatch(false));
+      }
       S.db.collection("tickets").doc(t.id).update(patch).catch(function(e){ toast(errText(e,"Couldn’t save the tag.")); });
     }},[el("span",{text:nm})])])); }); }
   var inp=el("input",{type:"search",placeholder:"Search "+(k==="l1"?"categories":"sub-categories"),oninput:function(e){fill(e.target.value.trim().toLowerCase());}});
-  pop=el("div",{class:"pop",role:"dialog","aria-label":"Set "+(k==="l1"?"L1":"L2")},[inp,el("div",{class:"hint",text:"Set "+(k==="l1"?"L1 category":"L2 sub-category")+" for this chat"}),list]);
+  pop=el("div",{class:"pop",role:"dialog","aria-label":"Set "+(k==="l1"?"L1":"L2")},[inp,el("div",{class:"hint",text:k==="l2"&&t.l1&&under.length?"Sub-categories under "+t.l1+" are listed first. The owner updates automatically from the rules.":"Set "+(k==="l1"?"L1 category":"L2 sub-category")+" for this chat. Freshchat won’t overwrite it."}),list]);
   fill(""); document.body.appendChild(pop);
   var r=anchor.getBoundingClientRect(), w=pop.offsetWidth;
   pop.style.left=Math.max(12,Math.min(window.innerWidth-w-12,r.left-8))+"px";
@@ -485,7 +609,8 @@ document.querySelector(".tablebox").addEventListener("scroll",closePop);
 function emailParts(t,own){
   var url=chatUrl(t);
   var subj="RCA needed: "+(t.l1||"Not tagged")+(t.l2?" / "+t.l2:"")+(t.orderId?" (order "+t.orderId+")":"");
-  var lines=["Hi "+String(own.name).split(" ")[0]+",","","A customer chat has been assigned to you for RCA.","",
+  var hi=String(own.name).split(/\s*,\s*/).map(function(n){ return n.split(" ")[0]; }).join(" and ");
+  var lines=["Hi "+hi+",","","A customer chat has been assigned to you for RCA.","",
     "Freshchat link: "+(url||"(link not available)"),
     "Order ID: "+(t.orderId||"None"),
     "Category (L1): "+(t.l1||"Not tagged"),
@@ -495,10 +620,10 @@ function emailParts(t,own){
     "Chat started: "+(t.createdAt?dtFmt.format(new Date(t.createdAt)):"Unknown"),
     "","Customer said:","\u201C"+String(t.message||"").slice(0,600)+"\u201D","",
     "Once it’s fixed, upload your RCA (PDF or Excel) to Google Drive, share it with HomeRun, and paste the Drive link on this chat’s row in the CS ticket tracker:",TRACKER_URL,"",
-    "RCA TAT target: "+S.settings.slaHours+" hours from now.","","Thanks"];
+    "Please set your expected TAT on the row. Default RCA TAT target: "+targetHours(t)+" hours from assignment.","","Thanks"];
   return {subject:subj,body:lines.join("\n")};
 }
-function mailto(t,own){ var p=emailParts(t,own); return "mailto:"+encodeURIComponent(own.email)+"?subject="+encodeURIComponent(p.subject)+"&body="+encodeURIComponent(p.body); }
+function mailto(t,own){ var p=emailParts(t,own); return "mailto:"+String(own.email).split(",").map(encodeURIComponent).join(",")+"?subject="+encodeURIComponent(p.subject)+"&body="+encodeURIComponent(p.body); }
 function mailStatus(t,own){
   if(S.sending[t.id]) return el("span",{class:"mail warn",text:"Sending email…"});
   if(t.emailSentAt) return el("span",{class:"mail ok",text:"Email sent "+dtFmt.format(new Date(t.emailSentAt))});
@@ -531,11 +656,12 @@ function b64utf8(str){ var bytes=new TextEncoder().encode(str), bin=""; for(var 
 function b64url(str){ return str.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
 function gmailSend(token,to,subject,body){
   var raw=["To: "+to,"Subject: =?UTF-8?B?"+b64utf8(subject)+"?=","MIME-Version: 1.0","Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: base64","",b64utf8(body).replace(/.{76}/g,"$&\r\n")].join("\r\n");
+  to=String(to).split(",").join(", ");
   return fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({raw:b64url(b64utf8(raw))})})
     .then(function(r){ if(r.ok) return r.json(); return r.json().catch(function(){return {};}).then(function(j){ throw {code:"http_"+r.status,message:(j.error&&j.error.message)||""}; }); },function(){ throw {code:"network"}; });
 }
 function sendEmail(t,own,tokenPromise){
-  if(!own.email){ toast("Add an email address for "+own.name+" in settings."); return Promise.resolve(); }
+  if(!own.email){ toast("Add an email address for "+own.name+" under Product owners & settings."); return Promise.resolve(); }
   var p=emailParts(t,own), ref=S.db.collection("tickets").doc(t.id);
   if(!gmailAuto()){
     openMail(mailto(t,own));
@@ -564,16 +690,16 @@ function confirmAssign(t,btn){
   var oid=S.choice[t.id]; var o=S.owners.filter(function(x){return x.id===oid})[0]; if(!o) return;
   var tokenP=null, drafted=null;
   if(o.email && gmailAuto()){ tokenP=gmailToken(); tokenP.catch(function(){}); }
-  var patch0={ownerId:o.id,ownerName:o.name,ownerEmail:o.email,assignedAt:new Date().toISOString()};
+  var patch0=assignPatch([o],false);
   if(o.email && !gmailAuto()){ openMail(mailto(Object.assign({},t,patch0),o)); drafted=new Date().toISOString(); }
   btn.disabled=true; btn.textContent="Saving…";
-  var patch=Object.assign(patch0,{assignedBy:null,emailSentAt:null,emailDraftedAt:drafted,emailTo:drafted?o.email:null,emailError:null});
+  var patch=Object.assign(patch0,{emailDraftedAt:drafted,emailTo:drafted?o.email:null});
   if(t.ownerId && t.ownerId!==o.id){ patch.previousOwnerId=t.ownerId; }
   S.db.collection("tickets").doc(t.id).update(patch).then(function(){
     delete S.changing[t.id]; delete S.choice[t.id];
     if(drafted){ toast("Assigned to "+o.name+". Your mail app opened with the email; press send there.",[el("button",{type:"button",text:"Copy email text",onclick:function(e){ copy(emailParts(Object.assign({},t,patch),o).body,e.currentTarget); }})],10000); return; }
     if(!o.email){ toast("Assigned to "+o.name+". Add their email in settings to notify them."); return; }
-    return sendEmail(Object.assign({},t,patch),o,tokenP||undefined);
+    return sendEmail(Object.assign({},t,patch),combine([o]),tokenP||undefined);
   }).catch(function(e){ btn.disabled=false; btn.textContent="Confirm"; toast(errText(e,"Couldn’t save the assignment.")); });
 }
 function copy(text,btn){
@@ -620,20 +746,29 @@ function openSettings(){
   var list=el("div",{class:"olist"});
   function fillOwners(){ list.textContent="";
     if(!S.owners.length) list.appendChild(el("div",{class:"o"},[el("span",{class:"muted",text:"No product owners yet."})]));
-    S.owners.forEach(function(o){ list.appendChild(el("div",{class:"o"},[el("div",null,[el("div",{text:o.name}),el("div",{class:"e",text:o.email})]),
-      S.canWrite?el("button",{class:"btn small",type:"button",text:"Remove",onclick:function(){ if(!confirm("Remove "+o.name+"? Tickets already assigned keep their name.")) return; S.db.collection("owners").doc(o.id).delete().catch(function(e){toast(errText(e,"Couldn’t remove."));}); }}):null])); });
+    S.owners.forEach(function(o){
+      if(!S.canWrite){ list.appendChild(el("div",{class:"o"},[el("div",null,[el("div",{text:o.name}),el("div",{class:"e",text:o.email||"No email"})])])); return; }
+      function save(field,input){ var v=input.value.trim(); if(v===(o[field]||"")) return;
+        if(field==="name"&&!v){ input.value=o.name; return; }
+        if(field==="email"&&v&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast("That email doesn’t look right."); return; }
+        var p={}; p[field]=v; S.db.collection("owners").doc(o.id).update(p).then(function(){ toast("Saved "+(v||"blank email")+"."); }).catch(function(e){ toast(errText(e,"Couldn’t save.")); }); }
+      var ni=el("input",{class:"oname",value:o.name,"aria-label":"Owner name"}), ei=el("input",{class:"oemail",type:"email",value:o.email||"",placeholder:"Add email",
+        "aria-label":"Owner email"});
+      ni.addEventListener("change",function(){ save("name",ni); }); ei.addEventListener("change",function(){ save("email",ei); });
+      list.appendChild(el("div",{class:"o"},[ni,ei,el("button",{class:"btn small",type:"button",text:"Remove",onclick:function(){ if(!confirm("Remove "+o.name+"? Tickets already assigned keep their name.")) return; S.db.collection("owners").doc(o.id).delete().catch(function(e){toast(errText(e,"Couldn’t remove."));}); }})]));
+    });
   }
   fillOwners(); S._fillOwners=fillOwners;
   var nm=el("input",{placeholder:"Name","aria-label":"Owner name"}), em=el("input",{type:"email",placeholder:"name@homerun.co","aria-label":"Owner email"});
   var add=el("button",{class:"btn",type:"button",text:"Add owner",onclick:function(){
-    var n=nm.value.trim(), m=em.value.trim(); if(!n||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){ toast("Enter a name and a valid email."); return; }
+    var n=nm.value.trim(), m=em.value.trim(); if(!n||(m&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m))){ toast("Enter a name, and a valid email if you have it."); return; }
     add.disabled=true; S.db.collection("owners").add({name:n,email:m,createdAt:new Date().toISOString()}).then(function(){nm.value=""; em.value=""; add.disabled=false; nm.focus();}).catch(function(e){add.disabled=false; toast(errText(e,"Couldn’t add the owner."));});
   }});
   var tpl=el("input",{value:S.settings.linkTemplate||"",placeholder:"https://yourcompany.freshchat.com/a/APP_ID/open/conversation/{id}"});
   var sla=el("input",{type:"number",min:"1",step:"1",value:String(S.settings.slaHours)});
   b.appendChild(el("h2",{text:"Product owners & settings"}));
   b.appendChild(el("h3",{text:"Product owners"}));
-  b.appendChild(el("p",{text:"These people appear in the assignee dropdown and receive the Freshchat link by email."}));
+  b.appendChild(el("p",{text:"These people appear in the assignee dropdown and receive the Freshchat link by email. Names must match the names used in Assignment rules. Edit a name or email and click away to save."}));
   b.appendChild(list);
   if(S.canWrite) b.appendChild(el("div",{class:"addrow"},[nm,em,add]));
   b.appendChild(el("h3",{text:"Freshchat chat link"}));
@@ -643,11 +778,70 @@ function openSettings(){
   b.appendChild(el("div",{class:"foot"},[el("button",{class:"btn",type:"button",text:"Close",onclick:function(){$("dlgSettings").close();}}),
     S.canWrite?el("button",{class:"btn primary",type:"button",text:"Save settings",onclick:function(e){
       var v={linkTemplate:tpl.value.trim(),slaHours:Math.max(1,Math.round(Number(sla.value)||48))};
-      e.currentTarget.disabled=true; S.db.doc("config/settings").set(v).then(function(){ toast("Settings saved."); $("dlgSettings").close(); }).catch(function(er){ toast(errText(er,"Couldn’t save settings.")); });
+      e.currentTarget.disabled=true; S.db.doc("config/settings").set(v,{merge:true}).then(function(){ toast("Settings saved."); $("dlgSettings").close(); }).catch(function(er){ toast(errText(er,"Couldn’t save settings.")); });
     }}):null]));
   $("dlgSettings").showModal();
 }
 $("btnSettings").addEventListener("click",openSettings);
+
+function routeDocId(l1,l2){ return "r_"+hash(rkey(l1)+"|"+rkey(l2)); }
+function openRules(){
+  var b=$("rulesBody"); b.textContent="";
+  var dl1=el("datalist",{id:"dlL1"},L1_LIST.map(function(v){return el("option",{value:v});}));
+  var dl2=el("datalist",{id:"dlL2"},allL2().map(function(v){return el("option",{value:v});}));
+  var dlo=el("datalist",{id:"dlOwners"},S.owners.map(function(o){return el("option",{value:o.name});}));
+  var tb=el("tbody");
+  function fill(){ tb.textContent="";
+    S.routes.slice().sort(function(a,b){ return (a.l1+a.l2).localeCompare(b.l1+b.l2); }).forEach(function(r){
+      var inp=el("input",{value:(r.owners||[]).join(", "),list:"dlOwners","aria-label":"Owners for "+r.l2,disabled:!S.canWrite});
+      inp.addEventListener("change",function(){ var names=inp.value.split(",").map(function(x){return x.trim();}).filter(Boolean);
+        S.db.collection("routing").doc(r.id).update({owners:names,updatedAt:new Date().toISOString()}).then(function(){ toast("Rule saved."); }).catch(function(e){ toast(errText(e,"Couldn’t save the rule.")); }); });
+      var unknown=(r.owners||[]).filter(function(n){ return !findOwner(n); });
+      tb.appendChild(el("tr",null,[el("td",{text:r.l1}),el("td",{text:r.l2}),el("td",null,[inp,unknown.length?el("div",{class:"warnname",text:"Not in Product owners: "+unknown.join(", ")}):null]),
+        el("td",null,[S.canWrite?el("button",{class:"btn small",type:"button",text:"Delete",onclick:function(){ if(!confirm("Delete the rule for "+r.l2+"?")) return; S.db.collection("routing").doc(r.id).delete().catch(function(e){ toast(errText(e,"Couldn’t delete.")); }); }}):null])]));
+    });
+  }
+  fill(); S._fillRules=fill;
+  var a1=el("input",{list:"dlL1",placeholder:"L1 category"}), a2=el("input",{list:"dlL2",placeholder:"L2 sub-category"}), ao=el("input",{list:"dlOwners",placeholder:"Owner names, comma separated"});
+  var addBtn=el("button",{class:"btn",type:"button",text:"Add rule",onclick:function(){
+    var l1=a1.value.trim(), l2=a2.value.trim(), names=ao.value.split(",").map(function(x){return x.trim();}).filter(Boolean);
+    if(!l1||!l2||!names.length){ toast("Fill in L1, L2 and at least one owner."); return; }
+    S.db.collection("routing").doc(routeDocId(l1,l2)).set({l1:l1,l2:l2,owners:names,updatedAt:new Date().toISOString()}).then(function(){ a1.value=""; a2.value=""; ao.value=""; toast("Rule added."); }).catch(function(e){ toast(errText(e,"Couldn’t add the rule.")); });
+  }});
+  var applyBtn=el("button",{class:"btn primary",type:"button",text:"Assign unassigned chats now",onclick:function(){ applyBtn.disabled=true; autoAssignPass().then(function(n){ applyBtn.disabled=false; toast(n?"Assigned "+n+" chat"+(n>1?"s":"")+" from the rules.":"Nothing to assign: every tagged chat in this date range already has an owner, or has no matching rule."); }); }});
+  b.appendChild(el("h2",{text:"Assignment rules"}));
+  b.appendChild(el("p",{text:"When a chat gets an L1/L2 (from Freshchat or set by hand), it’s assigned to these owners automatically. Several owners can share a rule. Chats you assign, change or unassign by hand are left alone. Edit the owners in a row and click away to save."}));
+  b.appendChild(el("div",{class:"rules"},[el("table",null,[el("thead",null,[el("tr",null,["L1","L2","Owners",""].map(function(h){return el("th",{text:h});}))]),tb])]));
+  if(S.canWrite) b.appendChild(el("div",{class:"addrow",style:"grid-template-columns:1fr 1.4fr 1.2fr auto"},[a1,a2,ao,addBtn]));
+  b.appendChild(dl1); b.appendChild(dl2); b.appendChild(dlo);
+  b.appendChild(el("div",{class:"foot"},[el("button",{class:"btn",type:"button",text:"Close",onclick:function(){$("dlgRules").close();}}),S.canWrite?applyBtn:null]));
+  $("dlgRules").showModal();
+}
+$("btnRules").addEventListener("click",openRules);
+
+/* Assign tagged, unassigned chats from the rules (runs automatically as data arrives). */
+var autoTimer=null, autoBusy={};
+function scheduleAuto(){ clearTimeout(autoTimer); autoTimer=setTimeout(autoAssignPass,1500); }
+function autoAssignPass(){
+  if(!S.db||!S.canWrite||!S.routesLoaded||!S.ownersLoaded) return Promise.resolve(0);
+  var todo=[];
+  S.tickets.forEach(function(t){ if(t.l2 && !t.ownerId && !t.autoAssignOff && !autoBusy[t.id]){ var ro=routeOwners(routeFor(t.l1,t.l2)); if(ro.length) todo.push({t:t,ro:ro}); } });
+  todo=todo.slice(0,400); var i=0, done=0;
+  function worker(){ if(i>=todo.length) return Promise.resolve(); var x=todo[i++]; autoBusy[x.t.id]=1;
+    return S.db.collection("tickets").doc(x.t.id).update(assignPatch(x.ro,true)).then(function(){ done++; },function(){}).then(function(){ delete autoBusy[x.t.id]; return worker(); }); }
+  return Promise.all([worker(),worker(),worker(),worker()]).then(function(){ return done; });
+}
+/* First open: save the default owners and rules from the mapping sheet. */
+function seedDefaults(){
+  if(!S.canWrite||S._seeding||!S.settingsLoaded||S.settings.routingSeeded||!S.routesLoaded||!S.ownersLoaded||S.routes.length) return;
+  S._seeding=true;
+  var batch=S.fs.batch(), now=new Date().toISOString();
+  DEFAULT_OWNERS.forEach(function(o){ if(!findOwner(o.name)) batch.set(S.db.collection("owners").doc(),{name:o.name,email:o.email,createdAt:now}); });
+  DEFAULT_ROUTING.forEach(function(r){ batch.set(S.db.collection("routing").doc(routeDocId(r[0],r[1])),{l1:r[0],l2:r[1],owners:r[2],updatedAt:now}); });
+  batch.set(S.db.doc("config/settings"),{routingSeeded:true},{merge:true});
+  batch.commit().then(function(){ toast("Saved the default assignment rules and product owners. Add the missing emails under Product owners & settings.",null,9000); })
+    .catch(function(e){ S._seeding=false; toast(errText(e,"Couldn’t save the default rules.")); });
+}
 
 /* ---------- import ---------- */
 var FIELDS=[
@@ -794,7 +988,7 @@ $("rangeSeg").addEventListener("click",function(e){ var b=e.target.closest("butt
 var st=null; $("search").addEventListener("input",function(e){ clearTimeout(st); var v=e.target.value; st=setTimeout(function(){S.search=v; render();},150); });
 
 /* running TAT clock (display only, no writes) */
-setInterval(function(){ if(S.tickets.some(function(t){return t.assignedAt&&!t.rcaAt;})) render(); },60000);
+setInterval(function(){ if(!pop && !document.querySelector("dialog[open]") && !(document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) && S.tickets.some(function(t){return t.assignedAt&&!t.rcaAt;})) render(); },60000);
 
 /* ---------- data ---------- */
 function subscribeTickets(){
@@ -804,7 +998,7 @@ function subscribeTickets(){
   q=q.orderBy("createdAt","desc").limit(3000);
   S.unsub=q.onSnapshot(function(snap){
     S.tickets=snap.docs.map(function(d){ var o=Object.assign({},d.data()); o.id=d.id; return o; });
-    S.hitLimit=snap.size>=3000; S.loaded=true; render();
+    S.hitLimit=snap.size>=3000; S.loaded=true; render(); scheduleAuto();
   },function(e){ S.loaded=true; toast(e&&e.code==="permission-denied"?"Your account doesn’t have access to the tickets.":"Tickets stopped updating. Reload the page."); render(); });
 }
 function showGate(msg){ $("app").hidden=true; $("gate").hidden=false; if(msg) $("gateMsg").textContent=msg; }
@@ -821,11 +1015,13 @@ function start(){
   function open(key){
     var root=fs.collection("workspaces").doc(key);
     S.key=key; TRACKER_URL=BASE_URL+"#key="+key;
+    S.fs=fs;
     S.db={collection:function(n){ return root.collection(n); },doc:function(p){ var a=p.split("/"); return root.collection(a[0]).doc(a[1]); }};
     root.collection("config").doc("settings").get().then(function(){
       $("gate").hidden=true; $("app").hidden=false; S.ready=true;
-      S.db.collection("owners").orderBy("name").onSnapshot(function(snap){ S.owners=snap.docs.map(function(d){var o=Object.assign({},d.data()); o.id=d.id; return o;}); if(S._fillOwners && $("dlgSettings").open) S._fillOwners(); render(); },function(){});
-      S.db.doc("config/settings").onSnapshot(function(snap){ var v=snap.exists?snap.data():{}; S.settings={linkTemplate:v.linkTemplate||"",slaHours:Number(v.slaHours)||48}; render(); },function(){});
+      S.db.collection("owners").orderBy("name").onSnapshot(function(snap){ S.owners=snap.docs.map(function(d){var o=Object.assign({},d.data()); o.id=d.id; return o;}); S.ownersLoaded=true; if(S._fillOwners && $("dlgSettings").open) S._fillOwners(); if(S._fillRules && $("dlgRules").open) S._fillRules(); render(); seedDefaults(); scheduleAuto(); },function(){});
+      S.db.collection("routing").onSnapshot(function(snap){ S.routes=snap.docs.map(function(d){var o=Object.assign({},d.data()); o.id=d.id; return o;}); S.routesLoaded=true; if(S._fillRules && $("dlgRules").open) S._fillRules(); render(); seedDefaults(); scheduleAuto(); },function(){});
+      S.db.doc("config/settings").onSnapshot(function(snap){ var v=snap.exists?snap.data():{}; S.settings={linkTemplate:v.linkTemplate||"",slaHours:Number(v.slaHours)||48,routingSeeded:!!v.routingSeeded}; S.settingsLoaded=true; render(); seedDefaults(); },function(){});
       subscribeTickets(); render();
     },function(e){
       try{ localStorage.removeItem(KEY_STORE); }catch(_){}
