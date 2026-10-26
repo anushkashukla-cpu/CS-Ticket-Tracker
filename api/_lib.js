@@ -308,3 +308,65 @@ export async function refreshTags(ticket, router) {
   if (router && !ticket.ownerId && !ticket.autoAssignOff) { const a = router(l1 || ticket.l1, l2 || ticket.l2); if (a) Object.assign(patch, a); }
   return fsPatch(ticket.id, patch, true);
 }
+
+/* Bring a report's conversation into the tracker (shared by the scheduled sync and the import lookup). */
+export async function upsertFromReport(c, router) {
+  const conv = c.conv !== undefined ? c.conv : await fcGet("/conversations/" + encodeURIComponent(c.convId)).catch(() => null);
+  const props = (conv && conv.properties) || {};
+  const l1 = clean(props[CFG.l1Field]) || clean(c.l1), l2 = clean(props[CFG.l2Field]) || clean(c.l2);
+  const id = docId(c.convId);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cur = await fsGet(id);
+    const fresh = c.msgs.filter((m) => !cur || !cur.lastUserMsgAt || m.t > cur.lastUserMsgAt);
+    if (!cur && !c.msgs.length && !l1) return "skipped";
+    const now = new Date().toISOString();
+    const patch = cur ? {} : {
+      createdAt: iso(conv && conv.created_time) || c.first || now, l1: "", l2: "", orderId: "", channel: "", message: "",
+      activeOrder: "", userMsgCount: 0, importedAt: now,
+    };
+    Object.assign(patch, { convId: c.convId, chatUrl: (conv && conv.url) || c.url || (cur && cur.chatUrl) || "", syncedAt: now, source: "freshchat-api" });
+    if (conv && conv.status) patch.status = conv.status;
+    if (!(cur && cur.tagManual)) { if (l1) patch.l1 = l1; if (l2) patch.l2 = l2; }
+    if (router && !(cur && (cur.ownerId || cur.autoAssignOff))) {
+      const a = router(patch.l1 ?? (cur && cur.l1), patch.l2 ?? (cur && cur.l2));
+      if (a) Object.assign(patch, a);
+    }
+    if (!(cur && cur.channel)) {
+      const ch = /whatsapp/i.test(c.chan) ? "WhatsApp" : c.src === "mobile" ? "App chat" : c.src === "web" ? "Web chat"
+        : (c.chan || (conv ? await channelLabel(conv.channel_id) : ""));
+      if (ch) patch.channel = ch;
+    }
+    const importedEarlier = cur && cur.message && cur.userMsgCount == null; // row came from a CSV import
+    if (fresh.length && importedEarlier) patch.lastUserMsgAt = fresh[fresh.length - 1].t;
+    else if (fresh.length) {
+      let count = (cur && cur.userMsgCount) || 0, msg = (cur && cur.message) || "";
+      for (const m of fresh) { if (count >= 3) break; msg = (msg ? msg + " / " : "") + m.text; count++; }
+      patch.message = msg.slice(0, 1500); patch.userMsgCount = count; patch.lastUserMsgAt = fresh[fresh.length - 1].t;
+    }
+    if (!(cur && cur.orderId)) {
+      const m = fresh.map((x) => x.text).join(" ").match(ORDER_RE);
+      if (m) patch.orderId = m[0]; else if (clean(props.cf_order_number)) patch.orderId = clean(props.cf_order_number);
+    }
+    if (await fsPatch(id, patch, !!cur)) return cur ? "updated" : "added";
+  }
+  throw new Error("couldn't save after 3 attempts");
+}
+
+/* Look a chat up in Freshchat (details + first customer messages) and add or update its row. */
+export async function enrichConversation(convId, fileTags, router) {
+  const conv = await fcGet("/conversations/" + encodeURIComponent(convId)).catch(() => null);
+  if (!conv) return "not_found";
+  let msgs = [], src = "";
+  try {
+    const j = await fcGet("/conversations/" + encodeURIComponent(convId) + "/messages?items_per_page=50");
+    const list = ((j && j.messages) || []).slice().sort((a, b) => String(a.created_time).localeCompare(String(b.created_time)));
+    for (const m of list) {
+      if (m.actor_type !== "user" || (m.message_type || "normal") !== "normal") continue;
+      const text = partsText(m.message_parts || m.msg_parts);
+      if (!src && m.message_source) src = m.message_source;
+      if (text) msgs.push({ t: iso(m.created_time), text });
+    }
+  } catch (e) { /* messages are optional; the row is still created from the conversation */ }
+  return upsertFromReport({ convId, conv, url: conv.url || "", chan: "", src, first: iso(conv.created_time), msgs,
+    l1: fileTags && fileTags.l1, l2: fileTags && fileTags.l2 }, router);
+}
