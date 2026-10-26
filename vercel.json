@@ -9,6 +9,9 @@
     },
     "api/poll.js": {
       "maxDuration": 300
+    },
+    "api/enrich.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
