@@ -7,7 +7,7 @@
 // (3) re-checks a batch of recent untagged chats for L1/L2 added later in Freshchat.
 import zlib from "node:zlib";
 import {
-  CFG, json, missingEnv, http, fcGet, fsGet, fsPatch, fsGetPath, fsSetPath, fsUntagged, refreshTags,
+  CFG, json, missingEnv, http, fcGet, fsGet, fsPatch, fsGetPath, fsSetPath, fsRecent, refreshTags,
   docId, partsText, channelLabel, ORDER_RE, clean, iso, loadRouter,
 } from "./_lib.js";
 
@@ -16,6 +16,10 @@ const MAX_WINDOW_MS = 24 * 3600e3;      // catch up at most one day per report
 const FIRST_LOOKBACK_MS = 3 * 3600e3;   // first run starts 3 hours back
 const PENDING_TIMEOUT_MS = 3 * 3600e3;  // give up on a report that never finishes
 const TAG_BATCH = 60;
+// Firestore's free plan allows ~50,000 reads a day; these keep each 15-minute run light.
+const TAG_CHECK_EVERY_MS = 60 * 60e3;   // re-check untagged chats once an hour
+const TAG_WINDOW_MS = 36 * 3600e3;      // only chats from the last 36 hours
+const TAG_SCAN_LIMIT = 250;
 const started = () => Date.now();
 
 // Any unexpected error is returned as readable JSON, so it shows up in the GitHub Actions log.
@@ -46,8 +50,9 @@ async function run(request) {
 
   const out = { ok: true };
   let state = (await fsGetPath(STATE)) || {};
-  let router = null;
-  try { router = await loadRouter(); } catch (e) { out.routing = "rules not loaded: " + e.message; }
+  // Assignment rules are read only when a run actually has chats to handle.
+  let routerP = null;
+  const getRouter = () => (routerP ||= loadRouter().catch((e) => { out.routing = "rules not loaded: " + e.message; return null; }));
 
   // 1) Collect the report requested last time
   if (state.pendingId) {
@@ -61,7 +66,7 @@ async function run(request) {
       } else if (links.length && !/progress|pending|queued|process/.test(status)) {
         const rows = [];
         for (const link of links) rows.push(...(await downloadCsvRows(link)));
-        const res = await importRows(rows, t0, router);
+        const res = await importRows(rows, t0, rows.length ? await getRouter() : null);
         out.report = { window: [state.pendingStart, state.pendingEnd], messages: rows.length, ...res };
         state = { ...state, lastEnd: state.pendingEnd, pendingId: "", pendingStart: "", pendingEnd: "", lastImportAt: new Date().toISOString() };
       } else if (Date.now() - Date.parse(state.pendingRequestedAt || 0) > PENDING_TIMEOUT_MS) {
@@ -99,19 +104,23 @@ async function run(request) {
     }
   }
 
-  // 3) Re-check recent untagged chats (rotates through them by last check time)
+  // 3) Once an hour, re-check recent untagged chats for L1/L2 added later in Freshchat
+  if (Date.now() - Date.parse(state.lastTagCheckAt || 0) < TAG_CHECK_EVERY_MS) { out.tags = "next check within the hour"; console.log(JSON.stringify(out)); return json(out); }
   try {
-    const since = new Date(Date.now() - 3 * 864e5).toISOString();
-    const todo = (await fsUntagged(1000))
-      .filter((t) => t.convId && !t.tagManual && (t.createdAt || "") >= since)
+    const since = new Date(Date.now() - TAG_WINDOW_MS).toISOString();
+    const todo = (await fsRecent(since, TAG_SCAN_LIMIT))
+      .filter((t) => t.convId && !t.l1 && !t.tagManual)
       .sort((a, b) => String(a.syncedAt || "").localeCompare(String(b.syncedAt || "")))
       .slice(0, TAG_BATCH);
+    const router = todo.length ? await getRouter() : null;
     let tagged = 0, i = 0;
     const worker = async () => {
       while (i < todo.length && Date.now() - t0 < 270e3) { const t = todo[i++]; try { if (await refreshTags(t, router)) tagged++; } catch (e) { console.error(t.id, e.message); } }
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     out.tags = { checked: Math.min(i, todo.length), newlyTagged: tagged };
+    state = { ...state, lastTagCheckAt: new Date().toISOString() };
+    await fsSetPath(STATE, state);
   } catch (e) {
     out.tags = "skipped: " + e.message;
   }
