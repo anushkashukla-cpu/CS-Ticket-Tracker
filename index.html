@@ -219,8 +219,8 @@ dialog.wide{width:min(1040px,calc(100vw - 24px))}
 
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Date range" id="rangeSeg">
-      <button type="button" data-r="today">Today</button>
-      <button type="button" data-r="week" aria-pressed="true">This week</button>
+      <button type="button" data-r="today" aria-pressed="true">Today</button>
+      <button type="button" data-r="week">This week</button>
       <button type="button" data-r="30">Last 30 days</button>
       <button type="button" data-r="all">All</button>
     </div>
@@ -297,7 +297,7 @@ function parseActive(v){ if(blank(v)) return ""; var s=String(v).trim().toLowerC
 /* ---------- state ---------- */
 var S={routes:[],routesLoaded:false,ownersLoaded:false,catOpen:{},linkOpen:{},db:null,auth:null,user:null,uid:null,canWrite:true,gmailToken:null,gmailExp:0,sending:{},
   tickets:[],owners:[],settings:{linkTemplate:"",slaHours:48},
-  range:"week",search:"",quick:null,
+  range:(function(){ try{ return localStorage.getItem("hr_range")||"today"; }catch(_){ return "today"; } })(),search:"",quick:null,
   filters:{l1:null,l2:null,channel:null,active:null,owner:null,email:null,rca:null},
   choice:{},changing:{},openMsg:{},hitLimit:false,loaded:false,unsub:null};
 
@@ -1069,7 +1069,8 @@ function runItems(items,bad,barFill,status,done){
 $("btnImport").addEventListener("click",openImport);
 
 /* ---------- toolbar ---------- */
-$("rangeSeg").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return; S.range=b.getAttribute("data-r");
+Array.prototype.forEach.call($("rangeSeg").querySelectorAll("button"),function(x){ x.setAttribute("aria-pressed",x.getAttribute("data-r")===S.range?"true":"false"); });
+$("rangeSeg").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return; S.range=b.getAttribute("data-r"); try{ localStorage.setItem("hr_range",S.range); }catch(_){}
   Array.prototype.forEach.call(this.querySelectorAll("button"),function(x){x.setAttribute("aria-pressed",x===b?"true":"false");}); subscribeTickets(); render(); });
 var st=null; $("search").addEventListener("input",function(e){ clearTimeout(st); var v=e.target.value; st=setTimeout(function(){S.search=v; render();},150); });
 
