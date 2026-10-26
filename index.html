@@ -941,9 +941,16 @@ var FIELDS=[
   {k:"message",l:"What the customer said",re:/first.?message|customer.?message|message.?(text|content|parts)|^message$|query|description|text/i},
   {k:"activeOrder",l:"Active order",re:/active/i}
 ];
+var DURATION_RE=/response|resolution|resolve|wait|duration|handle|hrs|hours|mins|minutes|secs|seconds|sla|tat|count|number of/i;
+function pickDate(headers){
+  var prefs=[/conversation.*created|created.*(time|at|date|on)|^created/i,/start(ed)?.*(time|at|date)/i,/date/i,/time/i];
+  for(var p=0;p<prefs.length;p++) for(var i=0;i<headers.length;i++) if(prefs[p].test(headers[i]) && !DURATION_RE.test(headers[i])) return headers[i];
+  return "";
+}
 function guess(headers){
   var used={}, map={};
-  FIELDS.forEach(function(f){ for(var i=0;i<headers.length;i++){ var h=headers[i]; if(used[h]) continue; if(f.k==="l1" && /sub/i.test(h)) continue; if(f.k==="chatUrl" && /image|avatar|attach/i.test(h)) continue; if(f.re.test(h)){ map[f.k]=h; used[h]=1; return; } } map[f.k]=""; });
+  var dh=pickDate(headers); if(dh){ map.createdAt=dh; used[dh]=1; }
+  FIELDS.forEach(function(f){ if(f.k==="createdAt"){ if(!dh) map.createdAt=""; return; } for(var i=0;i<headers.length;i++){ var h=headers[i]; if(used[h]) continue; if(f.k==="l1" && /sub/i.test(h)) continue; if(f.k==="chatUrl" && /image|avatar|attach/i.test(h)) continue; if(f.re.test(h)){ map[f.k]=h; used[h]=1; return; } } map[f.k]=""; });
   return map;
 }
 function openImport(){
@@ -984,6 +991,7 @@ function showMapping(stage,rows,headers){
 function toTicket(r,m){
   function g(k){ return m[k]?r[m[k]]:""; }
   var t={}, d=m.createdAt?parseDate(g("createdAt")):null, conv=clean(g("convId"));
+  if(d && (d.getFullYear()<2020 || d.getFullYear()>2100 || /^\s*[\d.]+\s*$/.test(String(g("createdAt"))) && String(g("createdAt")).length<10)) d=null;
   if(!d && !conv) return null;
   if(d) t.createdAt=d.toISOString(); else t._updateOnly=true;
   if(m.convId) t.convId=conv;
@@ -1044,17 +1052,37 @@ function runImport(rows,m,barFill,status,done){
   runItems(Object.keys(seen).map(function(k){return seen[k];}),bad,barFill,status,done);
 }
 function runItems(items,bad,barFill,status,done){
-  var i=0, added=0, updated=0, skipped=0, failed=0, total=items.length, active=0, LIMIT=6;
+  var i=0, added=0, updated=0, skipped=0, failed=0, total=items.length, active=0, LIMIT=6, lookup=[];
   function next(){
-    while(active<LIMIT && i<total){ (function(t){ active++; write(t,0).then(function(r){ if(r==="added") added++; else if(r==="skipped") skipped++; else updated++; },function(){ failed++; }).then(function(){ active--; tick(); next(); }); })(items[i++]); }
-    if(active===0 && i>=total){ status.textContent="Imported "+added+" new chats, updated "+updated+"."+(skipped?" Skipped "+skipped+" that aren’t in the tracker yet or have no customer message.":"")+(bad?" Skipped "+bad+" rows with no date or conversation ID.":"")+(failed?" "+failed+" couldn’t be saved; import the file again to retry them.":""); done(); }
+    while(active<LIMIT && i<total){ (function(t){ active++; write(t,0).then(function(r){ if(r==="added") added++; else if(r==="skipped") skipped++; else if(r==="queued") queued++; else updated++; },function(){ failed++; }).then(function(){ active--; tick(); next(); }); })(items[i++]); }
+    if(active===0 && i>=total && lookup.length && !lookupDone){ lookupDone=true; return runLookup(); }
+    if(active===0 && i>=total){ status.textContent="Imported "+added+" new chats, updated "+updated+"."+(lk.added||lk.updated?" Looked up "+(lk.added+lk.updated)+" chats in Freshchat ("+lk.added+" added).":"")+(lk.notFound?" "+lk.notFound+" weren’t found in Freshchat.":"")+(lk.error?" "+lk.error:"")+(skipped?" Skipped "+skipped+" new chats: they need a real date. Check that “Date & time” is matched to the column with when the chat started (for example “Created at”), not a duration.":"")+(bad?" Skipped "+bad+" rows with no date or conversation ID.":"")+(failed?" "+failed+" couldn’t be saved; import the file again to retry them.":""); done(); }
   }
-  function tick(){ var n=added+updated+skipped+failed; barFill.style.width=(total?Math.round(n/total*100):100)+"%"; status.textContent="Saving "+n+" of "+total+"…"; }
+  var queued=0, lookupDone=false, lk={added:0,updated:0,notFound:0,error:""};
+  /* Chats not in the tracker yet and without a usable date: fetch them from Freshchat through the tracker's server. */
+  function runLookup(){
+    var chunks=[]; for(var c=0;c<lookup.length;c+=40) chunks.push(lookup.slice(c,c+40));
+    var doneN=0;
+    function nextChunk(k){
+      if(k>=chunks.length){ next(); return; }
+      status.textContent="Looking up "+lookup.length+" new chats in Freshchat… "+doneN+" of "+lookup.length;
+      fetch("/api/enrich",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({key:S.key,items:chunks[k]})})
+        .then(function(r){ return r.json().catch(function(){ return {ok:false,error:"HTTP "+r.status}; }); })
+        .then(function(j){
+          if(!j.ok){ lk.error="Freshchat lookup failed: "+(j.error||"unknown error")+(location.hostname==="localhost"?" (the lookup only works on the hosted tracker).":"."); skipped+=lookup.length-doneN; next(); return; }
+          lk.added+=j.added||0; lk.updated+=j.updated||0; lk.notFound+=j.notFound||0; skipped+=(j.skipped||0)+(j.failed||0)+(j.unfinished||0);
+          doneN+=chunks[k].length; barFill.style.width=Math.round(doneN/lookup.length*100)+"%"; nextChunk(k+1);
+        },function(){ lk.error="Couldn’t reach the Freshchat lookup"+(location.hostname==="localhost"?"; it only works on the hosted tracker.":"."); skipped+=lookup.length-doneN; next(); });
+    }
+    nextChunk(0);
+  }
+  function tick(){ var n=added+updated+skipped+failed+queued; barFill.style.width=(total?Math.round(n/total*100):100)+"%"; status.textContent="Saving "+n+" of "+total+"…"; }
   function write(t,attempt){
     var body=Object.assign({},t); delete body._id; delete body._updateOnly; delete body._noCustomer;
     var ref=S.db.collection("tickets").doc(t._id);
     return ref.get().then(function(snap){
       if(snap.exists){ var cur=snap.data()||{}; if(cur.tagManual){ delete body.l1; delete body.l2; } return ref.update(body).then(function(){return "updated";}); }
+      if(t._updateOnly && t.convId){ lookup.push({convId:t.convId,l1:t.l1||"",l2:t.l2||""}); return "queued"; }
       if(t._updateOnly||t._noCustomer) return "skipped";
       body=Object.assign({l1:"",l2:"",orderId:"",channel:"",message:"",activeOrder:"",convId:"",chatUrl:""},body);
       body.importedAt=new Date().toISOString(); return ref.set(body).then(function(){return "added";});
