@@ -199,6 +199,19 @@ export async function loadRouter() {
   };
 }
 
+/* Chats created since a time (single-field range, no extra index needed). */
+export async function fsRecent(sinceIso, limit = 250) {
+  const r = await http(`${fsRoot()}:runQuery?key=${CFG.fbKey}`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ structuredQuery: {
+      from: [{ collectionId: "tickets" }],
+      where: { fieldFilter: { field: { fieldPath: "createdAt" }, op: "GREATER_THAN_OR_EQUAL", value: { stringValue: sinceIso } } },
+      orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }], limit } }),
+  });
+  if (!r.ok) throw new Error(`Firestore query ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return (await r.json()).filter((x) => x.document).map((x) => ({ id: x.document.name.split("/").pop(), ...dec(x.document.fields) }));
+}
+
 export async function fsUntagged(limit = 500) {
   const r = await http(`${fsRoot()}:runQuery?key=${CFG.fbKey}`, {
     method: "POST",
